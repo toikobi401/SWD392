@@ -1,0 +1,142 @@
+/**
+ * Domain enumerations shared by the «entity» classes.
+ * Source: Static Modeling (Ch. 7) §5.2 Entity Class Model.
+ */
+
+export enum AccountStatus {
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
+  ACTIVE = 'ACTIVE',
+  LOCKED = 'LOCKED',
+  DEACTIVATED = 'DEACTIVATED',
+}
+
+/** UC-G07 / UC-R06 / UC-R09 / UC-G14 — see §6.4 Booking lifecycle state machine. */
+export enum BookingStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  CHECKED_IN = 'CHECKED_IN',
+  CHECKED_OUT = 'CHECKED_OUT',
+  CANCELLED = 'CANCELLED',
+  NO_SHOW = 'NO_SHOW',
+}
+
+/** §6.5 Room lifecycle state machine. */
+export enum RoomStatus {
+  VACANT_CLEAN = 'VACANT_CLEAN',
+  VACANT_DIRTY = 'VACANT_DIRTY',
+  OCCUPIED = 'OCCUPIED',
+  INSPECTED = 'INSPECTED',
+  OUT_OF_ORDER = 'OUT_OF_ORDER',
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
+}
+
+export enum PaymentMethod {
+  CARD = 'CARD',
+  CASH = 'CASH',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+  E_WALLET = 'E_WALLET',
+  VOUCHER = 'VOUCHER',
+  LOYALTY_POINTS = 'LOYALTY_POINTS',
+}
+
+export enum FolioStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+}
+
+export enum ChargeType {
+  ROOM = 'ROOM',
+  SERVICE = 'SERVICE',
+  TAX = 'TAX',
+  DEPOSIT = 'DEPOSIT',
+  SURCHARGE = 'SURCHARGE',
+  DAMAGE = 'DAMAGE',
+  DISCOUNT = 'DISCOUNT',
+}
+
+/** UC-C17 / UC-M14. */
+export enum RefundStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  COMPLETED = 'COMPLETED',
+  REFUND_FAILED = 'REFUND_FAILED',
+}
+
+export enum DiscountType {
+  PERCENTAGE = 'PERCENTAGE',
+  FIXED_AMOUNT = 'FIXED_AMOUNT',
+}
+
+export enum ReviewStatus {
+  PENDING = 'PENDING',
+  PUBLISHED = 'PUBLISHED',
+  HIDDEN = 'HIDDEN',
+}
+
+/** UC-M06 — see §4 UC-M06 business rules BR-40…BR-44. */
+export enum LeaveStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+  ESCALATED = 'ESCALATED',
+}
+
+export enum LeaveType {
+  ANNUAL = 'ANNUAL',
+  SICK = 'SICK',
+  UNPAID = 'UNPAID',
+  MATERNITY = 'MATERNITY',
+}
+
+export enum AttendanceStatus {
+  PRESENT = 'PRESENT',
+  LATE = 'LATE',
+  ABSENT = 'ABSENT',
+  ON_LEAVE = 'ON_LEAVE',
+}
+
+/** RBAC — UC-A05 / UC-A06 / UC-A07. */
+export enum RoleName {
+  GUEST = 'GUEST',
+  CUSTOMER = 'CUSTOMER',
+  EMPLOYEE = 'EMPLOYEE',
+  RECEPTIONIST = 'RECEPTIONIST',
+  MANAGER = 'MANAGER',
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+}
+
+export enum Permission {
+  // Booking
+  BOOKING_READ = 'BOOKING_READ',
+  BOOKING_CREATE = 'BOOKING_CREATE',
+  BOOKING_MODIFY = 'BOOKING_MODIFY',
+  BOOKING_CANCEL = 'BOOKING_CANCEL',
+  // Front desk
+  CHECK_IN = 'CHECK_IN',
+  CHECK_OUT = 'CHECK_OUT',
+  ROOM_STATUS_UPDATE = 'ROOM_STATUS_UPDATE',
+  PROCESS_PAYMENT = 'PROCESS_PAYMENT',
+  PROCESS_REFUND = 'PROCESS_REFUND',
+  // Management
+  APPROVE_LEAVE = 'APPROVE_LEAVE',
+  APPROVE_REFUND = 'APPROVE_REFUND',
+  APPROVE_PAYROLL = 'APPROVE_PAYROLL',
+  MANAGE_INVENTORY = 'MANAGE_INVENTORY',
+  MANAGE_PRICING = 'MANAGE_PRICING',
+  VIEW_REPORTS = 'VIEW_REPORTS',
+  // Administration
+  MANAGE_ACCOUNTS = 'MANAGE_ACCOUNTS',
+  MANAGE_ROLES = 'MANAGE_ROLES',
+  MANAGE_SETTINGS = 'MANAGE_SETTINGS',
+  VIEW_AUDIT_LOG = 'VIEW_AUDIT_LOG',
+  MANAGE_BACKUP = 'MANAGE_BACKUP',
+}

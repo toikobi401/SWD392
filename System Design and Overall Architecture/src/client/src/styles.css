@@ -1,0 +1,467 @@
+/* Minimal presentation layer — enough structure to run and demonstrate the
+   flows, without pretending to be the final visual design. */
+
+:root {
+  --blue: #0b57d0;
+  --navy: #0b3d91;
+  --green: #34a853;
+  --red: #ea4335;
+  --amber: #f59e0b;
+  --border: #d6dee9;
+  --bg: #f7f9fc;
+  --text: #1a1a1a;
+  --muted: #5f6b7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: var(--text);
+  background: #fff;
+  line-height: 1.5;
+}
+
+/* --- Shell --------------------------------------------------------------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header .brand {
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--navy);
+  text-decoration: none;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.app-header a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.app-header a:hover {
+  color: var(--blue);
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+}
+
+main {
+  padding: 24px;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.page.narrow {
+  max-width: 420px;
+}
+
+h1 {
+  color: var(--navy);
+  font-size: 24px;
+}
+
+/* --- Forms --------------------------------------------------------------- */
+
+.form,
+.search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.search-form {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  max-width: none;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+label.radio,
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+input,
+select,
+textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #a9b6c7;
+  cursor: not-allowed;
+}
+
+button.danger {
+  background: var(--red);
+}
+
+button.link {
+  background: none;
+  color: var(--blue);
+  padding: 0;
+  text-decoration: underline;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+legend {
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.links {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* --- Messages ------------------------------------------------------------ */
+
+.error {
+  color: var(--red);
+  background: #fdeaea;
+  border-left: 3px solid var(--red);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.info {
+  color: #0b4f2c;
+  background: #eaf7ee;
+  border-left: 3px solid var(--green);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.warning {
+  background: #fffaf0;
+  border-left: 3px solid var(--amber);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hold-timer {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+/* --- Results ------------------------------------------------------------- */
+
+.results,
+.queue,
+.booking-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-card {
+  display: flex;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.result-card img {
+  width: 160px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.result-body {
+  flex: 1;
+}
+
+.result-body h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--navy);
+}
+
+.result-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  min-width: 170px;
+}
+
+.result-price strong {
+  font-size: 20px;
+  color: var(--navy);
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 2px 0;
+}
+
+/* --- Stepper & tabs ------------------------------------------------------ */
+
+.stepper {
+  display: flex;
+  gap: 24px;
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  color: var(--muted);
+}
+
+.stepper .active {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tabs button {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.tabs button.active {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+/* --- Front desk ---------------------------------------------------------- */
+
+.split {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.search-bar input {
+  flex: 1;
+}
+
+.booking-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.booking-list li.selected {
+  border-color: var(--blue);
+  background: #e5f3ff;
+}
+
+.detail-pane {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.room-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+button.room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  min-width: 78px;
+}
+
+button.room.selected {
+  border-color: var(--blue);
+  background: #e5f3ff;
+  color: var(--navy);
+  font-weight: 600;
+}
+
+button.room small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* --- Status pills -------------------------------------------------------- */
+
+.status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-confirmed {
+  background: #d9f2e1;
+  color: #0b4f2c;
+}
+
+.status-checked_in {
+  background: #e5f3ff;
+  color: #0b3d91;
+}
+
+.status-checked_out {
+  background: #eceff1;
+  color: #37474f;
+}
+
+.status-cancelled,
+.status-no_show {
+  background: #fdeaea;
+  color: #8c1d18;
+}
+
+.status-pending {
+  background: #fff4e5;
+  color: #8a5300;
+}
+
+/* --- Queue --------------------------------------------------------------- */
+
+.queue-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--navy);
+}
+
+.reason {
+  color: var(--muted);
+  margin: 0;
+}
+
+.filter {
+  max-width: 240px;
+  margin-bottom: 16px;
+}
+
+/* --- Review list --------------------------------------------------------- */
+
+.review dl {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 6px 16px;
+  margin: 16px 0;
+}
+
+.review dt {
+  color: var(--muted);
+}
+
+.review dd {
+  margin: 0;
+}
+
+.total {
+  font-size: 18px;
+  color: var(--navy);
+  font-weight: 600;
+}
