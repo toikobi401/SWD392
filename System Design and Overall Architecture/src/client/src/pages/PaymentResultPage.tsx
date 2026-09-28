@@ -61,66 +61,66 @@ export default function PaymentResultPage({ cancelled = false }: { cancelled?: b
 
   if (error) {
     return (
-      <div className="page narrow">
+      <main className="site-main narrow"><div className="panel stack">
         <h1>We could not check this payment</h1>
-        <p className="error">{error}</p>
-        <Link to="/">Back to search</Link>
-      </div>
+        <p className="notice error">{error}</p>
+        <Link to="/" className="btn">Back to rooms</Link>
+      </div></main>
     );
   }
 
   if (!result) {
     return (
-      <div className="page narrow">
+      <main className="site-main narrow"><div className="panel stack">
         <h1>Checking your payment…</h1>
-      </div>
+      </div></main>
     );
   }
 
   if (result.paymentStatus === 'PAID') {
     return (
-      <div className="page narrow">
+      <main className="site-main narrow"><div className="panel stack">
         <h1>Booking confirmed</h1>
-        <div className="info">
+        <div className="notice ok stack tight">
           <p>
             Your payment was received and booking <strong>{result.bookingCode}</strong> is
             confirmed.
           </p>
           <p>A confirmation has been sent to your email.</p>
         </div>
-        <Link to="/my-bookings">View my bookings</Link>
-      </div>
+        <Link to="/my-bookings" className="btn">See my bookings</Link>
+      </div></main>
     );
   }
 
   if (result.paymentStatus === 'FAILED') {
     return (
-      <div className="page narrow">
+      <main className="site-main narrow"><div className="panel stack">
         <h1>{cancelled ? 'Payment cancelled' : 'Payment not completed'}</h1>
-        <p className="warning">
+        <p className="notice warn">
           No money was taken and the room has been released. You can search again and book
           whenever you are ready.
         </p>
-        <Link to="/">Search rooms</Link>
-      </div>
+        <Link to="/" className="btn">Search rooms</Link>
+      </div></main>
     );
   }
 
   // Still PENDING.
   return (
-    <div className="page narrow">
+    <main className="site-main narrow"><div className="panel stack">
       <h1>{cancelled ? 'Did you cancel the payment?' : 'Waiting for your bank…'}</h1>
       {gaveUp ? (
-        <p className="warning">
+        <p className="notice warn">
           payOS has not confirmed this payment yet. If money has left your account, it will
           be matched automatically and you will receive a confirmation email. Reference:{' '}
           <strong>{result.bookingCode}</strong>
         </p>
       ) : (
-        <p className="hold-timer">
+        <p className="notice info">
           Confirming with payOS — this usually takes a few seconds. Please keep this page open.
         </p>
       )}
-    </div>
+    </div></main>
   );
 }

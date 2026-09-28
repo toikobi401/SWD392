@@ -91,7 +91,24 @@ export class NotificationProxy {
    * SES changes only this method (§8.1 Modifiability).
    */
   private static async send(message: NotificationMessage): Promise<void> {
-    const res = await fetch(`${process.env.NOTIFICATION_API_URL}/send`, {
+    const url = process.env.NOTIFICATION_API_URL;
+
+    // Development without a provider: print the message instead. Registration
+    // needs the verification link (BR-05) and password reset needs the OTP,
+    // so silently dropping mail would make both flows impossible to test.
+    if (!url) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('NOTIFICATION_API_URL is not configured');
+      }
+      console.log(
+        `\n[mail:dev] ${message.channel} to ${message.to}` +
+          (message.subject ? `\n[mail:dev] Subject: ${message.subject}` : '') +
+          `\n${message.body.replace(/^/gm, '[mail:dev] ')}\n`,
+      );
+      return;
+    }
+
+    const res = await fetch(`${url}/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

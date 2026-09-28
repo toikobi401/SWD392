@@ -92,7 +92,10 @@ export class LeaveApprovalService {
     return LeaveRequest.find({
       employeeId: { $in: staff.map((e) => e._id) },
       status: LeaveStatus.PENDING,
-    }).sort({ createdAt: 1 });
+    })
+      // The manager decides on a person, not an id.
+      .populate('employeeId', 'fullName position department leaveBalance')
+      .sort({ createdAt: 1 });
   }
 
   /**

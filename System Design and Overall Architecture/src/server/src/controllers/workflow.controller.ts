@@ -12,7 +12,7 @@ import { Request, Response } from 'express';
 import { RefundCoordinator } from '../services/refund.service';
 import { LeaveApprovalService } from '../services/leave.service';
 import { RoleAssignmentService, AccountService } from '../services/role.service';
-import { AccountQueries } from '../services/query.service';
+import { AccountQueries, LeaveQueries } from '../services/query.service';
 import { AuditService } from '../services/audit.service';
 import { LeaveType, AccountStatus, Permission } from '../models/enums';
 import { AppError } from '../utils/app-error';
@@ -72,6 +72,11 @@ export class LeaveController {
     });
 
     res.status(201).json(request);
+  }
+
+  /** GET /api/me/leave-requests — UC-E15/E16/E17, the employee's own */
+  static async mine(req: Request, res: Response): Promise<void> {
+    res.json(await LeaveQueries.forEmployee(req.auth!.sub));
   }
 
   /** POST /api/leave-requests/:id/cancel — UC-E16 */

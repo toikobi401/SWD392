@@ -89,8 +89,24 @@ export class RefundCoordinator {
       );
     }
 
-    // BR-37 — cap the request at what was actually captured (exception 1.0.E5).
-    const amount = Math.min(command.amount, payment.amount);
+    // BR-37 — a refund may never exceed what is still refundable: the amount
+    // captured, minus every reversal already committed. A FAILED reversal is
+    // committed too — with payOS it means "owed, to be transferred by hand" —
+    // so without subtracting it a guest could claim the same money twice.
+    const reversals = await Payment.find({
+      reversalOfId: payment._id,
+      status: { $in: [PaymentStatus.REVERSED, PaymentStatus.FAILED] },
+    });
+    const alreadyRefunded = reversals.reduce((sum, r) => sum + r.amount, 0);
+    const remaining = payment.amount - alreadyRefunded;
+    if (remaining <= 0) {
+      throw new AppError(
+        'ALREADY_REFUNDED',
+        'This payment has already been refunded in full — the transfer is on its way',
+        409,
+      );
+    }
+    const amount = Math.min(command.amount, remaining);
 
     const request = await RefundRequest.create({
       referenceNumber: this.generateReference(),
@@ -135,7 +151,10 @@ export class RefundCoordinator {
 
   /** UC-M14 — the manager's pending queue. */
   static async pendingQueue(): Promise<IRefundRequest[]> {
-    return RefundRequest.find({ status: RefundStatus.PENDING }).sort({ createdAt: 1 });
+    return RefundRequest.find({ status: RefundStatus.PENDING })
+      .populate('bookingId', 'bookingCode guest checkInDate checkOutDate totalAmount')
+      .populate('requestedBy', 'fullName email')
+      .sort({ createdAt: 1 });
   }
 
   /**

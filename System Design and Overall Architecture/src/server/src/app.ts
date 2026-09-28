@@ -46,10 +46,6 @@ export function createApp(): Application {
   return app;
 }
 
-export async function connectDatabase(): Promise<void> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is not configured');
-
-  await mongoose.connect(uri);
-  console.log('[db] connected');
-}
+// Kept exported from here so existing callers (server.ts, the smoke test)
+// keep working; the implementation lives in config/database.ts.
+export { connectDatabase, disconnectDatabase } from './config/database';

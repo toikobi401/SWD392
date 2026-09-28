@@ -16,7 +16,12 @@ import {
   RoomStatusService,
 } from '../services/check-in.service';
 import { PaymentService } from '../services/payment.service';
-import { BookingQueries, FolioQueries, RoomQueries } from '../services/query.service';
+import {
+  BookingQueries,
+  FolioQueries,
+  FrontDeskQueries,
+  RoomQueries,
+} from '../services/query.service';
 // Type-only: erased at compile time, so no runtime dependency on `rules`.
 import type { RoomEvent } from '../rules/booking-state-machine';
 import { ChargeType, PaymentMethod } from '../models/enums';
@@ -26,6 +31,16 @@ export class FrontDeskController {
   static async searchBooking(req: Request, res: Response): Promise<void> {
     const bookings = await BookingQueries.deskSearch(String(req.query.q ?? ''));
     res.json({ bookings, count: bookings.length });
+  }
+
+  /** GET /api/front-desk/overview — arrivals, in-house, departures, room counts */
+  static async overview(_req: Request, res: Response): Promise<void> {
+    res.json(await FrontDeskQueries.overview());
+  }
+
+  /** GET /api/front-desk/bookings/:id/folio — the folio id of a stay */
+  static async folioForBooking(req: Request, res: Response): Promise<void> {
+    res.json(await FolioQueries.byBooking(req.params.id));
   }
 
   /** GET /api/front-desk/allocatable?roomTypeId=&floor= — UC-R06 step 6 */

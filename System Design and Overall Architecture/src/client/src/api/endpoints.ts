@@ -1,13 +1,13 @@
 /**
- * Typed endpoint functions — one per use case, named after it.
- *
- * Grouping them this way keeps the §9 traceability readable from the client
- * side too: a page calls `bookingApi.create`, which is UC-G07.
+ * Typed endpoint functions — one per server route, grouped by who uses them.
+ * Pages never call axios directly; they go through these (and the hooks).
  */
 import { api, tokenStore } from './client';
 import type {
+  Account,
+  AllocatableRoom,
+  AuditEntry,
   AuthTokens,
-  AuthUser,
   Booking,
   BookingConfirmation,
   CancellationOutcome,
@@ -15,18 +15,24 @@ import type {
   CheckInResult,
   CheckOutResult,
   CreateBookingRequest,
-  AllocatableRoom,
-  LeaveRequestDto,
+  DeskOverview,
+  DeskPaymentResult,
+  FolioView,
+  LeaveRequest,
+  LeaveType,
+  PaymentMethod,
+  Profile,
   ReconcileResult,
-  RefundRequestDto,
-  RoomRackResponse,
-  RoomTypeSummary,
+  RefundRequest,
+  RoleDoc,
+  Room,
+  RoomEvent,
+  RoomType,
   SearchCriteria,
   SearchResponse,
 } from '../types';
 
 export const authApi = {
-  /** UC-G16 Register Account */
   async register(payload: {
     fullName: string;
     email: string;
@@ -34,229 +40,180 @@ export const authApi = {
     password: string;
     confirmPassword: string;
     acceptedTerms: boolean;
-  }) {
-    const { data } = await api.post('/auth/register', payload);
-    return data;
+  }): Promise<{ message: string }> {
+    return (await api.post('/auth/register', payload)).data;
   },
-
-  /** UC-G17 Login */
+  async verify(token: string): Promise<{ message: string }> {
+    return (await api.get('/auth/verify', { params: { token } })).data;
+  },
   async login(email: string, password: string): Promise<AuthTokens> {
     const { data } = await api.post<AuthTokens>('/auth/login', { email, password });
     tokenStore.set(data);
     return data;
   },
-
-  /** UC-C04 Logout */
   async logout(): Promise<void> {
     await api.post('/auth/logout').catch(() => undefined);
     tokenStore.clear();
   },
-
-  /** UC-C03 Reset Forgotten Password */
-  async forgotPassword(email: string, channel: 'EMAIL' | 'SMS' = 'EMAIL') {
-    const { data } = await api.post('/auth/forgot-password', { email, channel });
-    return data;
+  async forgotPassword(email: string, channel: 'EMAIL' | 'SMS' = 'EMAIL'): Promise<{ message: string }> {
+    return (await api.post('/auth/forgot-password', { email, channel })).data;
   },
-
-  async resetPassword(email: string, otp: string, newPassword: string) {
-    const { data } = await api.post('/auth/reset-password', { email, otp, newPassword });
-    return data;
+  async resetPassword(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
+    return (await api.post('/auth/reset-password', { email, otp, newPassword })).data;
   },
-
-  /** UC-C05 Change Password */
-  async changePassword(currentPassword: string, newPassword: string) {
-    const { data } = await api.post('/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
-    return data;
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    return (await api.post('/auth/change-password', { currentPassword, newPassword })).data;
   },
-
-  async me(): Promise<AuthUser & { roles: string[] }> {
-    const { data } = await api.get('/auth/me');
-    return data;
+  async me(): Promise<Profile> {
+    return (await api.get<Profile>('/auth/me')).data;
   },
 };
 
 export const roomApi = {
-  /** UC-G01 Search Available Rooms */
   async search(criteria: SearchCriteria): Promise<SearchResponse> {
-    const { data } = await api.get<SearchResponse>('/rooms/search', { params: criteria });
-    return data;
+    return (await api.get<SearchResponse>('/rooms/search', { params: criteria })).data;
   },
-
-  /** UC-G02 View Room / Room Type Details */
-  async detail(id: string): Promise<RoomTypeSummary> {
-    const { data } = await api.get<RoomTypeSummary>(`/room-types/${id}`);
-    return data;
+  async types(): Promise<RoomType[]> {
+    return (await api.get<{ roomTypes: RoomType[] }>('/room-types')).data.roomTypes;
+  },
+  async type(id: string): Promise<RoomType> {
+    return (await api.get<RoomType>(`/room-types/${id}`)).data;
   },
 };
 
 export const bookingApi = {
-  /** UC-G07 Book Room */
   async create(payload: CreateBookingRequest): Promise<BookingConfirmation> {
-    const { data } = await api.post<BookingConfirmation>('/bookings', payload);
-    return data;
+    return (await api.post<BookingConfirmation>('/bookings', payload)).data;
   },
-
-  /** UC-G13 Check Booking Status — anonymous lookup by code + email */
   async lookup(code: string, email: string): Promise<Booking> {
-    const { data } = await api.get<Booking>('/bookings/lookup', { params: { code, email } });
-    return data;
+    return (await api.get<Booking>('/bookings/lookup', { params: { code, email } })).data;
   },
-
-  /** UC-C11 View Booking History */
-  async mine(): Promise<{ bookings: Booking[]; count: number }> {
-    const { data } = await api.get('/me/bookings');
-    return data;
+  async mine(): Promise<Booking[]> {
+    return (await api.get<{ bookings: Booking[] }>('/me/bookings')).data.bookings;
   },
-
-  /** UC-C12 / UC-R02 View Booking Details */
   async detail(id: string): Promise<Booking> {
-    const { data } = await api.get<Booking>(`/bookings/${id}`);
-    return data;
+    return (await api.get<Booking>(`/bookings/${id}`)).data;
   },
-
-  /** UC-G14 Cancel Booking */
   async cancel(id: string, reason?: string): Promise<CancellationOutcome> {
-    const { data } = await api.post<CancellationOutcome>(`/bookings/${id}/cancel`, { reason });
-    return data;
+    return (await api.post<CancellationOutcome>(`/bookings/${id}/cancel`, { reason })).data;
+  },
+  async requestRefund(payload: { bookingId: string; amount: number; reasonCategory: string; description?: string }) {
+    return (await api.post<{ referenceNumber: string; status: string }>('/refund-requests', payload)).data;
   },
 };
 
 export const paymentApi = {
-  /** UC-G10 alt. flow 1.3 — the server asks payOS for the real status. */
   async reconcile(orderCode: number): Promise<ReconcileResult> {
-    const { data } = await api.get<ReconcileResult>(`/payments/payos/${orderCode}/reconcile`);
-    return data;
+    return (await api.get<ReconcileResult>(`/payments/payos/${orderCode}/reconcile`)).data;
+  },
+  async registerWebhook(webhookUrl: string): Promise<{ message: string }> {
+    return (await api.post('/payments/payos/confirm-webhook', { webhookUrl })).data;
   },
 };
 
-export const frontDeskApi = {
-  /** UC-R01 Search / Look Up Booking */
-  async searchBooking(q: string): Promise<{ bookings: Booking[]; count: number }> {
-    const { data } = await api.get('/front-desk/bookings', { params: { q } });
-    return data;
+export const deskApi = {
+  async overview(): Promise<DeskOverview> {
+    return (await api.get<DeskOverview>('/front-desk/overview')).data;
   },
-
-  /** UC-R06 step 6 — the rooms a receptionist may allocate */
-  async allocatableRooms(
-    roomTypeId: string,
-    floor?: number,
-  ): Promise<{ rooms: AllocatableRoom[] }> {
-    const { data } = await api.get('/front-desk/allocatable', {
-      params: { roomTypeId, floor },
-    });
-    return data;
+  async search(q: string): Promise<Booking[]> {
+    return (await api.get<{ bookings: Booking[] }>('/front-desk/bookings', { params: { q } })).data.bookings;
   },
-
-  /** UC-R06 Check In Guest */
+  async folioIdFor(bookingId: string): Promise<string | null> {
+    return (await api.get<{ folioId: string | null }>(`/front-desk/bookings/${bookingId}/folio`)).data.folioId;
+  },
+  async allocatable(roomTypeId: string, floor?: number): Promise<AllocatableRoom[]> {
+    return (await api.get<{ rooms: AllocatableRoom[] }>('/front-desk/allocatable', { params: { roomTypeId, floor } })).data.rooms;
+  },
   async checkIn(payload: CheckInRequest): Promise<CheckInResult> {
-    const { data } = await api.post<CheckInResult>('/front-desk/check-in', payload);
-    return data;
+    return (await api.post<CheckInResult>('/front-desk/check-in', payload)).data;
   },
-
-  /** UC-R09 Check Out Guest */
-  async checkOut(
-    bookingId: string,
-    options?: { lateCheckoutSurcharge?: number; waiveSurcharge?: boolean },
-  ): Promise<CheckOutResult> {
-    const { data } = await api.post<CheckOutResult>('/front-desk/check-out', {
-      bookingId,
-      ...options,
-    });
-    return data;
+  async checkOut(bookingId: string, options: { lateCheckoutSurcharge?: number; waiveSurcharge?: boolean } = {}): Promise<CheckOutResult> {
+    return (await api.post<CheckOutResult>('/front-desk/check-out', { bookingId, ...options })).data;
   },
-
-  /** UC-R12 View Room Availability */
-  async roomRack(): Promise<RoomRackResponse> {
-    const { data } = await api.get<RoomRackResponse>('/rooms/availability');
-    return data;
+  async rack(): Promise<{ rooms: Room[]; summary: Record<string, number>; total: number }> {
+    return (await api.get('/rooms/availability')).data;
   },
-
-  /** UC-R13 Update Room Status */
-  async updateRoomStatus(roomId: string, event: string, notes?: string) {
-    const { data } = await api.patch(`/rooms/${roomId}/status`, { event, notes });
-    return data;
+  async setRoomStatus(roomId: string, event: RoomEvent, notes?: string): Promise<{ status: string }> {
+    return (await api.patch(`/rooms/${roomId}/status`, { event, notes })).data;
   },
-
-  /** UC-R15 Process Payment */
-  async takePayment(folioId: string, amount: number, method: string, idempotencyKey: string) {
-    const { data } = await api.post(`/folios/${folioId}/payments`, {
-      amount,
-      method,
-      idempotencyKey,
-    });
-    return data;
+  async folio(folioId: string): Promise<FolioView> {
+    return (await api.get<FolioView>(`/folios/${folioId}`)).data;
   },
-};
-
-export const approvalApi = {
-  /** UC-M06 queue */
-  async pendingLeave(department: string): Promise<{ requests: LeaveRequestDto[] }> {
-    const { data } = await api.get('/leave-requests/pending', { params: { department } });
-    return data;
+  async postCharge(folioId: string, charge: { type: string; description: string; amount: number; quantity: number }) {
+    return (await api.post(`/folios/${folioId}/charges`, charge)).data;
   },
-
-  /** UC-M06 Approve / Reject Leave Request */
-  async decideLeave(
-    id: string,
-    approve: boolean,
-    options?: { note?: string; coverageOverrideJustification?: string; partialToDate?: string },
-  ) {
-    const { data } = await api.patch(`/leave-requests/${id}/decision`, {
-      approve,
-      ...options,
-    });
-    return data;
-  },
-
-  /** UC-M14 queue */
-  async pendingRefunds(): Promise<{ requests: RefundRequestDto[] }> {
-    const { data } = await api.get('/refund-requests/pending');
-    return data;
-  },
-
-  /** UC-M14 Approve Refund Request */
-  async decideRefund(
-    id: string,
-    approve: boolean,
-    options?: { approvedAmount?: number; note?: string },
-  ) {
-    const { data } = await api.patch(`/refund-requests/${id}/decision`, {
-      approve,
-      ...options,
-    });
-    return data;
-  },
-
-  /** UC-C17 Request Refund */
-  async requestRefund(payload: {
-    bookingId: string;
-    amount: number;
-    reasonCategory: string;
-    description?: string;
-  }) {
-    const { data } = await api.post('/refund-requests', payload);
-    return data;
+  async takePayment(folioId: string, amount: number, method: PaymentMethod, idempotencyKey: string): Promise<DeskPaymentResult> {
+    return (await api.post<DeskPaymentResult>(`/folios/${folioId}/payments`, { amount, method, idempotencyKey })).data;
   },
 };
 
 export const leaveApi = {
-  /** UC-E15 Submit Leave Request */
-  async submit(payload: {
-    type: string;
-    fromDate: string;
-    toDate: string;
-    reason: string;
-  }): Promise<LeaveRequestDto> {
-    const { data } = await api.post<LeaveRequestDto>('/leave-requests', payload);
-    return data;
+  async mine(): Promise<{ requests: LeaveRequest[]; balance: { annual: number; sick: number } | null }> {
+    return (await api.get('/me/leave-requests')).data;
   },
-
-  /** UC-E16 Cancel Leave Request */
+  async submit(payload: { type: LeaveType; fromDate: string; toDate: string; reason: string }): Promise<LeaveRequest> {
+    return (await api.post<LeaveRequest>('/leave-requests', payload)).data;
+  },
   async cancel(id: string) {
-    const { data } = await api.post(`/leave-requests/${id}/cancel`);
-    return data;
+    return (await api.post(`/leave-requests/${id}/cancel`)).data;
+  },
+  async pending(department: string): Promise<LeaveRequest[]> {
+    return (await api.get<{ requests: LeaveRequest[] }>('/leave-requests/pending', { params: { department } })).data.requests;
+  },
+  async decide(id: string, approve: boolean, options: { note?: string; coverageOverrideJustification?: string } = {}) {
+    return (await api.patch(`/leave-requests/${id}/decision`, { approve, ...options })).data;
+  },
+};
+
+export const refundApi = {
+  async pending(): Promise<RefundRequest[]> {
+    return (await api.get<{ requests: RefundRequest[] }>('/refund-requests/pending')).data.requests;
+  },
+  async decide(id: string, approve: boolean, options: { approvedAmount?: number; note?: string } = {}) {
+    return (await api.patch(`/refund-requests/${id}/decision`, { approve, ...options })).data;
+  },
+};
+
+export const adminApi = {
+  async accounts(params: { q?: string; status?: string; page?: number; pageSize?: number }): Promise<{ users: Account[]; total: number; page: number; pageSize: number }> {
+    return (await api.get('/accounts', { params })).data;
+  },
+  async createEmployee(payload: {
+    fullName: string;
+    email: string;
+    phone?: string;
+    employeeCode: string;
+    department: string;
+    position: string;
+    hireDate: string;
+    baseSalary: number;
+    roleId?: string;
+  }): Promise<{ id: string; employeeCode: string; email: string; temporaryPassword: string }> {
+    return (await api.post('/accounts', payload)).data;
+  },
+  async setStatus(id: string, status: string, reason?: string) {
+    return (await api.patch(`/accounts/${id}/status`, { status, reason })).data;
+  },
+  async assignRole(id: string, roleId: string, reason?: string) {
+    return (await api.post(`/accounts/${id}/roles`, { roleId, reason })).data;
+  },
+  async revokeRole(id: string, roleId: string) {
+    return (await api.delete(`/accounts/${id}/roles/${roleId}`)).data;
+  },
+  async roles(): Promise<RoleDoc[]> {
+    return (await api.get<{ roles: RoleDoc[] }>('/roles')).data.roles;
+  },
+  async setPermissions(roleId: string, permissions: string[]): Promise<RoleDoc> {
+    return (await api.put<RoleDoc>(`/roles/${roleId}/permissions`, { permissions })).data;
+  },
+  async audit(params: { action?: string; entityType?: string; actorId?: string; from?: string; to?: string; page?: number; pageSize?: number }): Promise<{ rows: AuditEntry[]; total: number }> {
+    return (await api.get('/audit-logs', { params })).data;
+  },
+  async loginHistory(userId: string): Promise<AuditEntry[]> {
+    return (await api.get<{ entries: AuditEntry[] }>(`/audit-logs/login-history/${userId}`)).data.entries;
+  },
+  /** The export needs the auth header, so it is fetched as a blob, not linked. */
+  async exportAudit(params: { from?: string; to?: string }): Promise<Blob> {
+    return (await api.get('/audit-logs/export', { params, responseType: 'blob' })).data;
   },
 };

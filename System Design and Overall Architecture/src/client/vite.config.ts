@@ -9,7 +9,10 @@ export default defineConfig({
     port: 3001,
     strictPort: true,
     // The dev server proxies /api so the browser sees one origin and no CORS
-    // preflight is needed during development.
-    proxy: { '/api': { target: 'http://localhost:3000', changeOrigin: true } },
+    // preflight is needed during development. VITE_API_TARGET points it at a
+    // different server (e.g. an isolated test instance).
+    proxy: {
+      '/api': { target: process.env.VITE_API_TARGET ?? 'http://localhost:3000', changeOrigin: true },
+    },
   },
 });

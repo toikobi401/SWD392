@@ -10,13 +10,23 @@
  * Realizes the read halves of: UC-G01, UC-G02, UC-G13, UC-C11, UC-C12,
  * UC-R01, UC-R02, UC-R06 step 6, UC-R12, UC-A01, UC-A05.
  */
-import { Booking, IBooking, RoomType, IRoomType, Room, IRoom } from '../models/booking.model';
-import { Folio, IFolio, Charge, ICharge } from '../models/billing.model';
-import { User, IUser, Role, IRole } from '../models/user.model';
+import {
+  Booking,
+  IBooking,
+  RoomType,
+  IRoomType,
+  Room,
+  IRoom,
+  LoyaltyAccount,
+} from '../models/booking.model';
+import { Folio, IFolio, Charge, ICharge, Payment, IPayment } from '../models/billing.model';
+import { User, IUser, Role, IRole, Employee } from '../models/user.model';
+import { LeaveRequest, ILeaveRequest } from '../models/hr.model';
 import { AvailabilityCalculator } from '../rules/availability.calculator';
 import { PricingRule } from '../rules/pricing.rule';
-import { Permission } from '../models/enums';
+import { BookingStatus, Permission } from '../models/enums';
 import { AppError } from '../utils/app-error';
+import { hotelToday, addDays } from '../utils/hotel-time';
 
 export interface PricedAvailability {
   roomType: Pick<IRoomType, 'name' | 'description' | 'capacity' | 'amenities' | 'images'> & {
@@ -72,6 +82,11 @@ export class RoomQueries {
     });
 
     return results.sort((x, y) => x.total - y.total);
+  }
+
+  /** The public room catalogue, cheapest first. */
+  static async listRoomTypes(): Promise<IRoomType[]> {
+    return RoomType.find({ isActive: true }).sort({ basePrice: 1 });
   }
 
   /** UC-G02 */
@@ -162,11 +177,128 @@ export class BookingQueries {
 }
 
 export class FolioQueries {
-  static async withCharges(folioId: string): Promise<{ folio: IFolio; charges: ICharge[] }> {
+  static async withCharges(folioId: string): Promise<{
+    folio: IFolio;
+    charges: ICharge[];
+    payments: IPayment[];
+    booking: IBooking | null;
+  }> {
     const folio = await Folio.findById(folioId);
     if (!folio) throw new AppError('NOT_FOUND', 'Folio not found', 404);
-    const charges = await Charge.find({ folioId: folio._id }).sort({ postedAt: 1 });
-    return { folio, charges };
+    const [charges, payments, booking] = await Promise.all([
+      Charge.find({ folioId: folio._id }).sort({ postedAt: 1 }),
+      Payment.find({ folioId: folio._id }).sort({ createdAt: 1 }),
+      Booking.findById(folio.bookingId).populate('roomTypeId').populate('roomId'),
+    ]);
+    return { folio, charges, payments, booking };
+  }
+
+  /** The folio of a stay — opened at check-in, so null before it. */
+  static async byBooking(bookingId: string): Promise<{ folioId: string | null }> {
+    const folio = await Folio.findOne({ bookingId }).select('_id');
+    return { folioId: folio ? String(folio._id) : null };
+  }
+}
+
+/**
+ * The front desk's day at a glance — arrivals, in-house guests, departures —
+ * in hotel-local time (see utils/hotel-time).
+ */
+export class FrontDeskQueries {
+  static async overview(): Promise<{
+    date: Date;
+    arrivals: IBooking[];
+    inHouse: IBooking[];
+    departures: IBooking[];
+    rooms: Record<string, number>;
+  }> {
+    const today = hotelToday();
+    const tomorrow = addDays(today, 1);
+
+    const [arrivals, inHouse, roomCounts] = await Promise.all([
+      Booking.find({
+        status: BookingStatus.CONFIRMED,
+        checkInDate: { $gte: today, $lt: tomorrow },
+      })
+        .populate('roomTypeId')
+        .sort({ 'guest.fullName': 1 }),
+      Booking.find({ status: BookingStatus.CHECKED_IN })
+        .populate('roomTypeId')
+        .populate('roomId')
+        .sort({ checkOutDate: 1 }),
+      Room.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    ]);
+
+    // Due out today, or overdue — still in house past their departure date.
+    const departures = inHouse.filter((b) => b.checkOutDate < tomorrow);
+
+    return {
+      date: today,
+      arrivals,
+      inHouse,
+      departures,
+      rooms: Object.fromEntries(roomCounts.map((r) => [r._id, r.count])),
+    };
+  }
+}
+
+export class ProfileQueries {
+  /**
+   * GET /auth/me — the signed-in person's own record. Permissions are
+   * recomputed from the roles in the database (BR-46), so a role change shows
+   * up here even before the token is refreshed.
+   */
+  static async me(userId: string) {
+    const user = await User.findById(userId).populate<{ roles: IRole[] }>('roles');
+    if (!user) throw new AppError('NOT_FOUND', 'Account not found', 404);
+
+    const roles = (user.roles as unknown as IRole[]) ?? [];
+    const raw = user.toObject() as unknown as Record<string, unknown>;
+    const userType = (raw.userType as string | undefined) ?? 'User';
+
+    const profile: Record<string, unknown> = {
+      id: String(user._id),
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      status: user.status,
+      userType,
+      roles: roles.map((r) => r.name),
+      permissions: [...new Set(roles.flatMap((r) => r.permissions ?? []))],
+      isStaff: userType === 'Employee',
+    };
+
+    if (userType === 'Customer') {
+      const loyalty = await LoyaltyAccount.findOne({ customerId: user._id });
+      profile.loyalty = loyalty
+        ? { points: loyalty.pointBalance, tier: loyalty.tier }
+        : { points: 0, tier: 'BRONZE' };
+    }
+
+    if (userType === 'Employee') {
+      profile.employee = {
+        employeeCode: raw.employeeCode,
+        department: raw.department,
+        position: raw.position,
+        leaveBalance: raw.leaveBalance,
+      };
+    }
+
+    return profile;
+  }
+}
+
+export class LeaveQueries {
+  /** UC-E15/E16/E17 — an employee's own requests and remaining balance. */
+  static async forEmployee(employeeId: string): Promise<{
+    requests: ILeaveRequest[];
+    balance: { annual: number; sick: number } | null;
+  }> {
+    const [requests, employee] = await Promise.all([
+      LeaveRequest.find({ employeeId }).sort({ fromDate: -1 }),
+      Employee.findById(employeeId),
+    ]);
+    return { requests, balance: employee ? employee.leaveBalance : null };
   }
 }
 

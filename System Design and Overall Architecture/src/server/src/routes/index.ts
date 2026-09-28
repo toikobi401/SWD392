@@ -55,6 +55,7 @@ router.post('/auth/forgot-password', h(AuthController.forgotPassword)); // UC-C0
 router.post('/auth/reset-password', h(AuthController.resetPassword)); // UC-C03
 
 router.get('/rooms/search', h(RoomController.search)); // UC-G01
+router.get('/room-types', h(RoomController.list)); // room catalogue
 router.get('/room-types/:id', h(RoomController.detail)); // UC-G02
 
 // optionalAuth: the same endpoint serves an anonymous Guest and a signed-in
@@ -84,6 +85,7 @@ router.get('/payments/payos/:orderCode/reconcile', h(PaymentController.reconcile
 
 router.use('/me', authenticate);
 router.get('/me/bookings', h(BookingController.myBookings)); // UC-C11
+router.get('/me/leave-requests', h(LeaveController.mine)); // UC-E15/E16/E17
 
 router.post('/auth/logout', authenticate, h(AuthController.logout)); // UC-C04
 router.post('/auth/change-password', authenticate, h(AuthController.changePassword)); // UC-C05
@@ -116,6 +118,18 @@ router.get(
   authenticate,
   requirePermission(Permission.BOOKING_READ),
   h(FrontDeskController.searchBooking),
+);
+router.get(
+  '/front-desk/overview', // arrivals / in-house / departures
+  authenticate,
+  requirePermission(Permission.BOOKING_READ),
+  h(FrontDeskController.overview),
+);
+router.get(
+  '/front-desk/bookings/:id/folio',
+  authenticate,
+  requirePermission(Permission.BOOKING_READ),
+  h(FrontDeskController.folioForBooking),
 );
 router.get(
   '/front-desk/allocatable', // UC-R06 step 6

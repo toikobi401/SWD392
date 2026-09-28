@@ -18,7 +18,13 @@ import {
   Service,
   InventoryHold,
 } from '../models/booking.model';
-import { BookingStatus, PaymentStatus, PaymentMethod, RefundStatus } from '../models/enums';
+import {
+  BookingStatus,
+  PaymentStatus,
+  PaymentMethod,
+  Permission,
+  RefundStatus,
+} from '../models/enums';
 import { RefundRequest, Payment } from '../models/billing.model';
 import { AvailabilityCalculator, HOLD_DURATION_MS } from '../rules/availability.calculator';
 import { PricingRule, AddOnSelection } from '../rules/pricing.rule';
@@ -247,9 +253,8 @@ export class BookingCoordinator {
    */
   static async cancelBooking(
     bookingId: string,
-    actorId: string | undefined,
+    actor: { id: string; permissions: Permission[] },
     reason?: string,
-    isNonRefundableRate = false,
   ): Promise<{
     booking: IBooking;
     refundable: number;
@@ -257,8 +262,19 @@ export class BookingCoordinator {
     /** How the money comes back — told to the guest plainly, never implied. */
     refundStatus: 'NONE' | 'ISSUED' | 'MANUAL_TRANSFER' | 'AWAITING_APPROVAL';
   }> {
+    const actorId = actor.id;
     const booking = await Booking.findById(bookingId);
     if (!booking) throw new AppError('BOOKING_NOT_FOUND', 'Booking not found', 404);
+
+    // Ownership: a Customer may cancel only their own booking; desk staff
+    // (BOOKING_MODIFY, UC-R05) may cancel any. Without this check, holding
+    // BOOKING_CANCEL would let one guest cancel another's stay by changing
+    // the id in the URL.
+    const isOwner = booking.customerId !== undefined && String(booking.customerId) === actorId;
+    if (!isOwner && !actor.permissions.includes(Permission.BOOKING_MODIFY)) {
+      // 404, not 403: do not confirm that someone else's booking id exists.
+      throw new AppError('BOOKING_NOT_FOUND', 'Booking not found', 404);
+    }
 
     // Step 2 — the state machine rejects a cancel that the lifecycle forbids.
     if (!BookingStateMachine.can(booking.status, 'CANCEL')) {
@@ -270,10 +286,12 @@ export class BookingCoordinator {
     }
 
     // Steps 3–4 — «application logic» evaluates the policy.
+    // The rate type is read from the booking — never from the request, or a
+    // guest on a non-refundable rate could simply omit it (BR-20).
     const outcome = CancellationPolicyRule.evaluate(
       booking,
       new Date(),
-      isNonRefundableRate,
+      booking.nonRefundable,
     );
     if (!outcome.allowed) {
       throw new AppError('CANNOT_CANCEL', outcome.reason, 409);

@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "npm run smoke",
-    "smoke": "tsc && node test/smoke.e2e.js"
+    "smoke": "tsc && node test/smoke.e2e.js",
+    "seed": "tsx src/config/seed-cli.ts",
+    "seed:demo": "tsx src/config/demo-cli.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

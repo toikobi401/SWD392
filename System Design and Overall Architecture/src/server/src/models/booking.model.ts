@@ -114,6 +114,9 @@ export interface IBooking extends Document {
   actualCheckOutAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
+  /** BR-20 — booked on a non-refundable rate. Set at booking time, never by
+   *  the cancel request. */
+  nonRefundable: boolean;
 
   nights(): number;
   canBeCancelled(): boolean;
@@ -158,6 +161,7 @@ const bookingSchema = new Schema<IBooking>(
     actualCheckOutAt: Date,
     cancelledAt: Date,
     cancellationReason: String,
+    nonRefundable: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

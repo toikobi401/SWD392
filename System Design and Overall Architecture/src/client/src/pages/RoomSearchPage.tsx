@@ -1,167 +1,160 @@
 /**
- * «boundary» / user interaction — RoomSearchPage
- *
- * Realizes: UC-G01 Search Available Rooms (and the entry point to UC-G07).
- * The date validation here mirrors the server's, so the guest is corrected
- * before a round trip — but the server still enforces it (UC-G01 exceptions
- * 1.0.E1–1.0.E3 are never trusted to the client alone).
+ * UC-G01 Search Available Rooms — the home page. The search IS the hero: the
+ * one thing a guest comes here to do. Before a search, the room catalogue
+ * shows what the hotel has; after one, only what is free for those dates.
  */
 import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useRoomSearch, formatMoney } from '../hooks';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { roomApi } from '../api/endpoints';
+import { ErrorNotice, Loading, Notice, Empty } from '../components/ui';
+import { hotelTodayISO, money } from '../lib/format';
 import type { SearchCriteria } from '../types';
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function tomorrow(): string {
-  return new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-}
 
 export default function RoomSearchPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState<SearchCriteria>({
-    checkIn: today(),
-    checkOut: tomorrow(),
-    adults: 2,
-    children: 0,
-    rooms: 1,
+  const [params, setParams] = useSearchParams();
+
+  const submitted: SearchCriteria | null = params.get('checkIn')
+    ? {
+        checkIn: params.get('checkIn')!,
+        checkOut: params.get('checkOut')!,
+        adults: Number(params.get('adults') ?? 2),
+        children: Number(params.get('children') ?? 0),
+        rooms: 1,
+      }
+    : null;
+
+  const [form, setForm] = useState<SearchCriteria>(
+    submitted ?? { checkIn: hotelTodayISO(0), checkOut: hotelTodayISO(2), adults: 2, children: 0, rooms: 1 },
+  );
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const results = useQuery({
+    queryKey: ['search', submitted],
+    queryFn: () => roomApi.search(submitted!),
+    enabled: Boolean(submitted),
   });
-  const [submitted, setSubmitted] = useState<SearchCriteria | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const catalogue = useQuery({ queryKey: ['room-types'], queryFn: roomApi.types, enabled: !submitted });
 
-  const { data, isLoading, isError, error: queryError } = useRoomSearch(submitted);
-
-  function handleSubmit(e: FormEvent) {
+  function search(e: FormEvent) {
     e.preventDefault();
-    setError(null);
-
-    // UC-G01 exceptions 1.0.E1–1.0.E3, checked client-side for fast feedback.
-    if (form.checkIn < today()) {
-      return setError('Check-in date cannot be in the past.');
-    }
-    if (form.checkOut <= form.checkIn) {
-      return setError('Check-out must be after check-in.');
-    }
-    const nights = Math.ceil(
-      (Date.parse(form.checkOut) - Date.parse(form.checkIn)) / 86_400_000,
-    );
-    if (nights > 30) {
-      return setError('For stays longer than 30 nights please contact us.');
-    }
-
-    setSubmitted({ ...form });
+    setFormError(null);
+    // Mirrors the server's UC-G01 exceptions for instant feedback; the server
+    // still enforces them.
+    if (form.checkIn < hotelTodayISO(0)) return setFormError('Check-in cannot be in the past.');
+    if (form.checkOut <= form.checkIn) return setFormError('Check-out must be after check-in.');
+    const n = (Date.parse(form.checkOut) - Date.parse(form.checkIn)) / 86_400_000;
+    if (n > 30) return setFormError('For stays longer than 30 nights, please contact the hotel.');
+    setParams({
+      checkIn: form.checkIn,
+      checkOut: form.checkOut,
+      adults: String(form.adults),
+      children: String(form.children),
+    });
   }
 
   return (
-    <div className="page">
-      <h1>Find a room</h1>
+    <main className="site-main">
+      <section className="hero" aria-labelledby="hero-title">
+        <h1 id="hero-title">When are you staying with us?</h1>
+        <p>120 rooms at Hoa Lac, from a single for a work trip to a suite for the whole family. Prices include VAT.</p>
 
-      <form onSubmit={handleSubmit} className="search-form">
-        <label>
-          Check-in
-          <input
-            type="date"
-            value={form.checkIn}
-            min={today()}
-            onChange={(e) => setForm({ ...form, checkIn: e.target.value })}
-            required
-          />
-        </label>
+        <form className="hero-form" onSubmit={search}>
+          <label className="field">
+            Check-in
+            <input type="date" value={form.checkIn} min={hotelTodayISO(0)} required
+              onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
+          </label>
+          <label className="field">
+            Check-out
+            <input type="date" value={form.checkOut} min={form.checkIn} required
+              onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
+          </label>
+          <label className="field">
+            Adults
+            <input type="number" min={1} max={8} value={form.adults}
+              onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })} />
+          </label>
+          <label className="field">
+            Children
+            <input type="number" min={0} max={6} value={form.children}
+              onChange={(e) => setForm({ ...form, children: Number(e.target.value) })} />
+          </label>
+          <button className="btn" type="submit">Show available rooms</button>
+        </form>
+        {formError && <Notice tone="error">{formError}</Notice>}
+      </section>
 
-        <label>
-          Check-out
-          <input
-            type="date"
-            value={form.checkOut}
-            min={form.checkIn}
-            onChange={(e) => setForm({ ...form, checkOut: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Adults
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={form.adults}
-            onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })}
-          />
-        </label>
-
-        <label>
-          Children
-          <input
-            type="number"
-            min={0}
-            max={10}
-            value={form.children}
-            onChange={(e) => setForm({ ...form, children: Number(e.target.value) })}
-          />
-        </label>
-
-        <label>
-          Rooms
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={form.rooms}
-            onChange={(e) => setForm({ ...form, rooms: Number(e.target.value) })}
-          />
-        </label>
-
-        <button type="submit">Search</button>
-      </form>
-
-      {error && <p className="error">{error}</p>}
-      {isLoading && <p>Searching…</p>}
-      {isError && <p className="error">{(queryError as Error).message}</p>}
-
-      {/* UC-G01 exception 1.0.E4 — no availability is a normal outcome. */}
-      {data && data.results.length === 0 && (
-        <p className="empty">No rooms are available for these dates. Try different dates.</p>
+      {submitted ? (
+        <section className="stack" aria-live="polite">
+          <div className="row between">
+            <h2>Available for your dates</h2>
+            {results.data && <span className="muted small">{results.data.count} room type{results.data.count === 1 ? '' : 's'}</span>}
+          </div>
+          {results.isLoading && <Loading label="Checking availability…" />}
+          <ErrorNotice error={results.error} />
+          {results.data?.count === 0 && (
+            <Empty title="Nothing free for these dates">
+              <p>Try moving your dates by a day or two, or fewer guests per room.</p>
+            </Empty>
+          )}
+          <div className="room-list">
+            {results.data?.results.map((r) => (
+              <article className="room-card" key={r.roomType.id}>
+                <div>
+                  <h3>
+                    <Link to={`/rooms/${r.roomType.id}`}>{r.roomType.name}</Link>
+                  </h3>
+                  <p className="muted small">
+                    Sleeps {r.roomType.capacity}.{' '}
+                    {r.availableCount <= 3
+                      ? `Only ${r.availableCount} left for these dates.`
+                      : `${r.availableCount} available.`}
+                  </p>
+                  <div className="amenities">
+                    {r.roomType.amenities.map((a) => <span className="chip" key={a}>{a}</span>)}
+                  </div>
+                </div>
+                <div className="price">
+                  <strong className="money">{money(r.total)}</strong>
+                  <span className="muted xs">{r.nights} night{r.nights === 1 ? '' : 's'}, VAT included</span>
+                  <button
+                    className="btn"
+                    onClick={() => navigate('/book', { state: { roomType: r.roomType, criteria: submitted, quote: r } })}
+                  >
+                    Book this room
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="stack">
+          <h2>Our rooms</h2>
+          {catalogue.isLoading && <Loading />}
+          <ErrorNotice error={catalogue.error} />
+          <div className="room-list">
+            {catalogue.data?.map((t) => (
+              <article className="room-card" key={t._id}>
+                <div>
+                  <h3><Link to={`/rooms/${t._id}`}>{t.name}</Link></h3>
+                  <p className="muted small">Sleeps {t.capacity}. {t.totalRooms} rooms of this type.</p>
+                  <div className="amenities">
+                    {t.amenities.map((a) => <span className="chip" key={a}>{a}</span>)}
+                  </div>
+                </div>
+                <div className="price">
+                  <span className="muted xs">from</span>
+                  <strong className="money">{money(t.basePrice)}</strong>
+                  <span className="muted xs">per night, before VAT</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
-
-      <ul className="results">
-        {data?.results.map((item) => (
-          <li key={item.roomType.id} className="result-card">
-            {item.roomType.images[0] && (
-              <img src={item.roomType.images[0]} alt={item.roomType.name} />
-            )}
-
-            <div className="result-body">
-              <h2>{item.roomType.name}</h2>
-              <p>{item.roomType.description}</p>
-              <p className="meta">
-                Sleeps {item.roomType.capacity} · {item.roomType.amenities.join(' · ')}
-              </p>
-              <p className="meta">
-                {item.availableCount} room{item.availableCount === 1 ? '' : 's'} left
-              </p>
-            </div>
-
-            <div className="result-price">
-              <strong>{formatMoney(item.total)}</strong>
-              <span>
-                {item.nights} night{item.nights === 1 ? '' : 's'}, incl. tax
-              </span>
-              <button
-                onClick={() =>
-                  navigate('/book', {
-                    state: { roomType: item.roomType, criteria: submitted, quote: item },
-                  })
-                }
-              >
-                Book now
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
+    </main>
   );
 }

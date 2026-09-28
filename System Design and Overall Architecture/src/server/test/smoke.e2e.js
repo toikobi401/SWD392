@@ -134,12 +134,13 @@ process.env.FRONTEND_URL = FRONTEND;
   const { Folio, Payment } = req('dist/models/billing.model.js');
   const { AuditLog } = req('dist/models/hr.model.js');
 
-  await Role.create({ name: 'CUSTOMER', permissions: ['BOOKING_READ', 'BOOKING_CANCEL'] });
-  const recRole = await Role.create({
-    name: 'RECEPTIONIST',
-    permissions: ['BOOKING_READ', 'CHECK_IN', 'CHECK_OUT', 'PROCESS_PAYMENT', 'ROOM_STATUS_UPDATE'],
-  });
-  const adminRole = await Role.create({ name: 'ADMIN', permissions: ['MANAGE_SETTINGS'] });
+  // Roles come from the REAL permission table, never hand-written here: an
+  // earlier hand-written CUSTOMER role wrongly held BOOKING_READ and hid an
+  // IDOR bug (any customer could cancel any booking).
+  const { seedRoles } = req('dist/config/seed.js');
+  await seedRoles();
+  const recRole = await Role.findOne({ name: 'RECEPTIONIST' });
+  const adminRole = await Role.findOne({ name: 'ADMIN' });
   const rt = await RoomType.create({
     name: 'Deluxe Double', description: 'Sea view', capacity: 2,
     basePrice: 1200000, amenities: ['WiFi'], images: [], totalRooms: 3,
@@ -357,12 +358,32 @@ process.env.FRONTEND_URL = FRONTEND;
   r = await post('/api/bookings', bookingBody({ checkInDate: in6, checkOutDate: out6 }), token);
   const { booking: b6, payment: p6 } = await paymentOf(r.body.bookingCode);
   await post('/api/payments/payos/webhook', payAtBank(p6.gatewayOrderCode));
+  // IDOR: a second customer must not be able to touch the first one's booking.
+  await post('/api/auth/register', { fullName: 'Mallory', email: 'mal@x.com', phone: '0999', password: 'Passw0rdX', confirmPassword: 'Passw0rdX', acceptedTerms: true });
+  await User.updateOne({ email: 'mal@x.com' }, { status: 'ACTIVE' });
+  const mallory = (await post('/api/auth/login', { email: 'mal@x.com', password: 'Passw0rdX' })).body.accessToken;
+  r = await post('/api/bookings/' + b6._id + '/cancel', { reason: 'not mine' }, mallory);
+  check("IDOR: another customer cannot cancel someone else's booking",
+    r.status === 404 && (await Booking.findById(b6._id)).status === 'CONFIRMED', JSON.stringify(r.body));
+  r = await get('/api/bookings/' + b6._id, mallory);
+  check("IDOR: another customer cannot read someone else's booking", r.status === 403, 'status=' + r.status);
+  // BR-20: the rate type comes from the booking, not from the request body.
+  r = await post('/api/bookings', bookingBody({ checkInDate: day(16), checkOutDate: day(17) }), token);
+  const { booking: b7, payment: p7 } = await paymentOf(r.body.bookingCode);
+  await post('/api/payments/payos/webhook', payAtBank(p7.gatewayOrderCode));
+  await Booking.updateOne({ _id: b7._id }, { nonRefundable: true }); // booked on a non-refundable rate
+  r = await post('/api/bookings/' + b7._id + '/cancel', { reason: 'x', isNonRefundableRate: false }, token);
+  check('BR-20 non-refundable rate: client cannot claim a refund via the request body',
+    r.status === 200 && r.body.refundable === 0 && r.body.refundStatus === 'NONE', JSON.stringify(r.body));
+
   r = await post('/api/bookings/' + b6._id + '/cancel', { reason: 'Plans changed' }, token);
   check('UC-G14 free cancellation: full refund due, routed to MANUAL_TRANSFER',
     r.status === 200 && r.body.status === 'CANCELLED' && r.body.refundable === 2640000 && r.body.refundStatus === 'MANUAL_TRANSFER', JSON.stringify(r.body));
   check('Refund recorded for the accounts team (audit REFUND_MANUAL_TRANSFER_REQUIRED)',
     !!(await AuditLog.findOne({ action: 'REFUND_MANUAL_TRANSFER_REQUIRED', entityId: String(p6._id) })), '');
   check('BR-33 original payment untouched', (await Payment.findById(p6._id)).status === 'PAID', '');
+  r = await post('/api/refund-requests', { bookingId: String(b6._id), amount: 2640000, reasonCategory: 'CANCELLATION' }, token);
+  check('BR-37 no second refund of money already being refunded', r.status === 409 && r.body.error.code === 'ALREADY_REFUNDED', JSON.stringify(r.body));
 
   // ==========================================================================
   console.log('--- UC-A12 register webhook ---');

@@ -1,232 +1,187 @@
 /**
- * «boundary» / user interaction — BookingWizardPage
- *
- * Realizes: UC-G07 Book Room, following the Normal Flow as three visible steps:
- * contact details (UC-G08) → review and voucher (UC-G11) → payment (UC-G10).
- *
- * The hold placed server-side lasts 15 minutes (BR-10), so the page shows the
- * remaining time and stops the guest before they submit against an expired
- * hold — UC-G07 exception 1.0.E2.
+ * UC-G07 Book Room — contact details (UC-G08), review with voucher (UC-G11),
+ * then hand-off to payOS (UC-G10). The room is held for 15 minutes (BR-10);
+ * the countdown stops the guest before they pay against an expired hold.
  */
 import { FormEvent, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useCreateBooking, formatMoney, formatDate, useAuth } from '../hooks';
-import { ApiError } from '../api/client';
-import type { GuestDetails, PaymentMethod, SearchCriteria, SearchResultItem } from '../types';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { bookingApi } from '../api/endpoints';
+import { useAuth } from '../auth/AuthContext';
+import { ErrorNotice, Notice } from '../components/ui';
+import { money, stayRange } from '../lib/format';
+import type { GuestDetails, SearchCriteria, SearchResultItem } from '../types';
 
 const HOLD_SECONDS = 15 * 60;
-
-type Step = 'CONTACT' | 'REVIEW' | 'PAYMENT';
+type Step = 'details' | 'review';
 
 export default function BookingWizardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const { state } = useLocation() as {
-    state: { roomType: SearchResultItem['roomType']; criteria: SearchCriteria; quote: SearchResultItem };
+    state: { roomType: SearchResultItem['roomType']; criteria: SearchCriteria; quote: SearchResultItem } | null;
   };
 
-  const [step, setStep] = useState<Step>('CONTACT');
+  const [step, setStep] = useState<Step>('details');
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [voucherCode, setVoucherCode] = useState('');
-  // payOS settles by VietQR bank transfer — there is no separate card option.
-  const [paymentMethod] = useState<PaymentMethod>('BANK_TRANSFER');
   const [guest, setGuest] = useState<GuestDetails>({
-    // UC-G07 alternative flow 1.2 — prefilled for a signed-in Customer.
-    fullName: user?.fullName ?? '',
-    email: user?.email ?? '',
-    phone: '',
+    fullName: profile?.fullName ?? '',
+    email: profile?.email ?? '',
+    phone: profile?.phone ?? '',
     specialRequest: '',
   });
 
-  const createBooking = useCreateBooking();
-
-  // BR-10 countdown.
   useEffect(() => {
-    const timer = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
   }, []);
+
+  const book = useMutation({
+    mutationFn: () =>
+      bookingApi.create({
+        roomTypeId: state!.roomType.id,
+        checkInDate: state!.criteria.checkIn,
+        checkOutDate: state!.criteria.checkOut,
+        adults: state!.criteria.adults,
+        children: state!.criteria.children,
+        guest,
+        voucherCode: voucherCode || undefined,
+        // payOS settles by VietQR bank transfer.
+        paymentMethod: 'BANK_TRANSFER',
+      }),
+    onSuccess: (r) => {
+      // UC-G10 step 5 — payOS hosts the payment page.
+      if (r.paymentUrl) window.location.href = r.paymentUrl;
+      else navigate(`/booking/lookup?code=${r.bookingCode}&email=${encodeURIComponent(guest.email)}`);
+    },
+  });
 
   if (!state?.roomType) {
     return (
-      <div className="page">
-        <p>Please start from a room search.</p>
-        <button onClick={() => navigate('/')}>Back to search</button>
-      </div>
+      <main className="site-main narrow">
+        <div className="stack">
+          <h1>Choose your dates first</h1>
+          <p className="muted">A booking starts from a room search.</p>
+          <Link to="/" className="btn">Search rooms</Link>
+        </div>
+      </main>
     );
   }
 
   const expired = secondsLeft === 0;
+  const mm = Math.floor(secondsLeft / 60);
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+  const { roomType, criteria, quote } = state;
 
-  async function handleConfirm(e: FormEvent) {
+  function toReview(e: FormEvent) {
     e.preventDefault();
-
-    const result = await createBooking.mutateAsync({
-      roomTypeId: state.roomType.id,
-      checkInDate: state.criteria.checkIn,
-      checkOutDate: state.criteria.checkOut,
-      adults: state.criteria.adults,
-      children: state.criteria.children,
-      roomCount: state.criteria.rooms,
-      guest,
-      voucherCode: voucherCode || undefined,
-      paymentMethod,
-    });
-
-    // UC-G10 step 5 — hand the guest to the payOS checkout. They come back to
-    // /payment/result/:orderCode, which confirms the payment with the server.
-    if (result.paymentUrl) {
-      window.location.href = result.paymentUrl;
-      return;
-    }
-
-    navigate('/booking-confirmed', { state: { confirmation: result } });
+    setStep('review');
   }
 
-  const error = createBooking.error as ApiError | null;
-
   return (
-    <div className="page">
-      <h1>Complete your booking</h1>
+    <main className="site-main">
+      <div className="row between" style={{ marginBottom: 12 }}>
+        <h1>Book {roomType.name}</h1>
+        {!expired && <span className="hold" role="timer">Room held for {mm}:{ss}</span>}
+      </div>
 
-      <p className={expired ? 'error' : 'hold-timer'}>
-        {expired
-          ? 'Your session expired. Please search again.'
-          : `We are holding this room for ${Math.floor(secondsLeft / 60)}:${String(
-              secondsLeft % 60,
-            ).padStart(2, '0')}`}
-      </p>
-
-      <ol className="stepper">
-        <li className={step === 'CONTACT' ? 'active' : ''}>1. Your details</li>
-        <li className={step === 'REVIEW' ? 'active' : ''}>2. Review</li>
-        <li className={step === 'PAYMENT' ? 'active' : ''}>3. Payment</li>
+      <ol className="steps">
+        <li className={step === 'details' ? 'current' : 'done'}>Your details</li>
+        <li className={step === 'review' ? 'current' : ''}>Review</li>
+        <li>Pay with payOS</li>
       </ol>
 
-      {/* Step 3–4: «include» UC-G08 Enter Contact Information */}
-      {step === 'CONTACT' && (
-        <form
-          className="form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setStep('REVIEW');
-          }}
-        >
-          <label>
-            Full name
-            <input
-              value={guest.fullName}
-              onChange={(e) => setGuest({ ...guest, fullName: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              value={guest.email}
-              onChange={(e) => setGuest({ ...guest, email: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Phone
-            <input
-              value={guest.phone}
-              onChange={(e) => setGuest({ ...guest, phone: e.target.value })}
-              required
-            />
-          </label>
-          <label>
-            Special request
-            <textarea
-              value={guest.specialRequest}
-              onChange={(e) => setGuest({ ...guest, specialRequest: e.target.value })}
-            />
-          </label>
-          <button type="submit" disabled={expired}>
-            Continue
-          </button>
-        </form>
+      {expired && (
+        <Notice tone="warn">
+          The 15-minute hold on this room has ended. <Link to="/">Search again</Link> to see current availability.
+        </Notice>
       )}
 
-      {/* Step 7–8: summary and «extend» UC-G11 Apply Discount Code */}
-      {step === 'REVIEW' && (
-        <div className="review">
-          <h2>{state.roomType.name}</h2>
-          <dl>
-            <dt>Check-in</dt>
-            <dd>{formatDate(state.criteria.checkIn)}</dd>
-            <dt>Check-out</dt>
-            <dd>{formatDate(state.criteria.checkOut)}</dd>
-            <dt>Guests</dt>
-            <dd>
-              {state.criteria.adults} adult(s), {state.criteria.children} child(ren)
-            </dd>
-            <dt>Room subtotal</dt>
-            <dd>{formatMoney(state.quote.subtotal)}</dd>
-            <dt>Tax</dt>
-            <dd>{formatMoney(state.quote.tax)}</dd>
-            <dt>
-              <strong>Total</strong>
-            </dt>
-            <dd>
-              <strong>{formatMoney(state.quote.total)}</strong>
-            </dd>
-          </dl>
-
-          <label>
-            Voucher code
-            <input
-              value={voucherCode}
-              onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-              placeholder="Optional"
-            />
-          </label>
-
-          <div className="actions">
-            <button onClick={() => setStep('CONTACT')}>Back</button>
-            <button onClick={() => setStep('PAYMENT')} disabled={expired}>
-              Continue to payment
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 9: «include» UC-G10 Pay for Booking */}
-      {step === 'PAYMENT' && (
-        <form className="form" onSubmit={handleConfirm}>
-          <fieldset>
-            <legend>Payment method</legend>
-            <p>
-              <strong>payOS — VietQR / banking app.</strong> You will be taken to a secure payOS
-              page to scan a QR code with any Vietnamese banking app. We never see your bank
-              details.
-            </p>
-          </fieldset>
-
-          <p className="total">Amount due: {formatMoney(state.quote.total)}</p>
-
-          {/* UC-G07 exceptions surface here by code, not by guessing at text. */}
-          {error && (
-            <p className="error">
-              {error.code === 'NO_AVAILABILITY'
-                ? 'This room is no longer available. Please search again.'
-                : error.code === 'PAYMENT_DECLINED'
-                  ? 'Payment was declined. Please try another method.'
-                  : error.message}
-            </p>
+      <div className="split" style={{ marginTop: 16 }}>
+        <div className="panel">
+          {step === 'details' ? (
+            <form className="form" onSubmit={toReview}>
+              <h2>Who is staying?</h2>
+              <label className="field">
+                Full name, as on your ID
+                <input value={guest.fullName} required autoComplete="name"
+                  onChange={(e) => setGuest({ ...guest, fullName: e.target.value })} />
+              </label>
+              <div className="form-row">
+                <label className="field">
+                  Email
+                  <input type="email" value={guest.email} required autoComplete="email"
+                    onChange={(e) => setGuest({ ...guest, email: e.target.value })} />
+                </label>
+                <label className="field">
+                  Phone
+                  <input type="tel" value={guest.phone} required autoComplete="tel"
+                    onChange={(e) => setGuest({ ...guest, phone: e.target.value })} />
+                </label>
+              </div>
+              <label className="field">
+                Anything we should know? <span className="hint">Optional — arrival time, a quiet room, an extra pillow.</span>
+                <textarea value={guest.specialRequest}
+                  onChange={(e) => setGuest({ ...guest, specialRequest: e.target.value })} />
+              </label>
+              <div className="actions">
+                <button className="btn" type="submit" disabled={expired}>Continue to review</button>
+              </div>
+            </form>
+          ) : (
+            <div className="form">
+              <h2>Check and pay</h2>
+              <dl className="facts">
+                <dt>Guest</dt>
+                <dd>{guest.fullName}</dd>
+                <dt>Contact</dt>
+                <dd>{guest.email}, {guest.phone}</dd>
+                {guest.specialRequest && (
+                  <>
+                    <dt>Request</dt>
+                    <dd>{guest.specialRequest}</dd>
+                  </>
+                )}
+              </dl>
+              <label className="field" style={{ maxWidth: 260 }}>
+                Voucher code <span className="hint">Optional. The discount is applied when you pay.</span>
+                <input value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} placeholder="WELCOME10" />
+              </label>
+              <Notice tone="info">
+                You will pay on a secure payOS page by scanning a VietQR code with any Vietnamese banking app.
+                Your booking is confirmed as soon as the transfer arrives.
+              </Notice>
+              <ErrorNotice error={book.error} />
+              <div className="actions">
+                <button className="btn secondary" onClick={() => setStep('details')}>Edit details</button>
+                <button className="btn" disabled={expired || book.isPending} onClick={() => book.mutate()}>
+                  {book.isPending ? 'Opening payOS…' : `Pay ${money(quote.total)}`}
+                </button>
+              </div>
+            </div>
           )}
+        </div>
 
-          <div className="actions">
-            <button type="button" onClick={() => setStep('REVIEW')}>
-              Back
-            </button>
-            <button type="submit" disabled={expired || createBooking.isPending}>
-              {createBooking.isPending ? 'Processing…' : 'Confirm and pay'}
-            </button>
+        <aside className="panel summary" aria-label="Booking summary">
+          <h3>{roomType.name}</h3>
+          <p className="muted small" style={{ marginTop: 4 }}>{stayRange(criteria.checkIn, criteria.checkOut)}</p>
+          <p className="muted small">
+            {criteria.adults} adult{criteria.adults === 1 ? '' : 's'}
+            {criteria.children ? `, ${criteria.children} child${criteria.children === 1 ? '' : 'ren'}` : ''}
+          </p>
+          <dl className="facts" style={{ marginTop: 14 }}>
+            <dt>Room</dt>
+            <dd className="money">{money(quote.subtotal)}</dd>
+            <dt>VAT 10%</dt>
+            <dd className="money">{money(quote.tax)}</dd>
+          </dl>
+          <div className="total">
+            <span>Total</span>
+            <span className="money">{money(quote.total)}</span>
           </div>
-        </form>
-      )}
-    </div>
+        </aside>
+      </div>
+    </main>
   );
 }

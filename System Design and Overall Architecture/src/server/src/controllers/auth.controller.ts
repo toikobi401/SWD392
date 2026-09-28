@@ -11,6 +11,7 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { AuditService } from '../services/audit.service';
+import { ProfileQueries } from '../services/query.service';
 
 export class AuthController {
   /** POST /api/auth/register — UC-G16 */
@@ -93,11 +94,6 @@ export class AuthController {
 
   /** GET /api/auth/me — the caller's own claims, for the client to render by. */
   static async me(req: Request, res: Response): Promise<void> {
-    res.json({
-      id: req.auth!.sub,
-      email: req.auth!.email,
-      roles: req.auth!.roles,
-      permissions: req.auth!.permissions,
-    });
+    res.json(await ProfileQueries.me(req.auth!.sub));
   }
 }

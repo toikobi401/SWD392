@@ -39,6 +39,11 @@ export class RoomController {
     res.json({ checkIn, checkOut, results, count: results.length });
   }
 
+  /** GET /api/room-types — the public room catalogue */
+  static async list(_req: Request, res: Response): Promise<void> {
+    res.json({ roomTypes: await RoomQueries.listRoomTypes() });
+  }
+
   /** GET /api/room-types/:id — UC-G02 */
   static async detail(req: Request, res: Response): Promise<void> {
     res.json(await RoomQueries.roomTypeDetail(req.params.id));
@@ -98,9 +103,8 @@ export class BookingController {
   static async cancel(req: Request, res: Response): Promise<void> {
     const result = await BookingCoordinator.cancelBooking(
       req.params.id,
-      req.auth?.sub,
+      { id: req.auth!.sub, permissions: req.auth!.permissions ?? [] },
       req.body.reason,
-      Boolean(req.body.isNonRefundableRate),
     );
 
     res.json({
