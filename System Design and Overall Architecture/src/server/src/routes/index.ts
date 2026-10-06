@@ -10,6 +10,7 @@ import { AuthController } from '../controllers/auth.controller';
 import { BookingController, RoomController } from '../controllers/booking.controller';
 import { FrontDeskController } from '../controllers/frontdesk.controller';
 import { PaymentController } from '../controllers/payment.controller';
+import { PromotionController } from '../controllers/promotion.controller';
 import {
   RefundController,
   LeaveController,
@@ -63,16 +64,19 @@ router.get('/room-types/:id', h(RoomController.detail)); // UC-G02
 router.post(
   '/bookings', // UC-G07
   optionalAuth,
+  // The rooms themselves (a `rooms` list, or the older single-room fields)
+  // are validated room by room in BookingCoordinator.
   validateBody([
-    { field: 'roomTypeId', required: true, type: 'string' },
     { field: 'checkInDate', required: true, type: 'date' },
     { field: 'checkOutDate', required: true, type: 'date' },
-    { field: 'adults', required: true, type: 'number', min: 1 },
     { field: 'paymentMethod', required: true, type: 'string' },
   ]),
   h(BookingController.create),
 );
 router.get('/bookings/lookup', h(BookingController.lookup)); // UC-G13
+
+router.get('/promotions/public', h(PromotionController.publicOffers)); // UC-G06
+router.get('/promotions/validate', h(PromotionController.validate)); // UC-G11 preview
 
 // payOS — authenticated by HMAC signature, not by JWT (called by payOS itself).
 router.post('/payments/payos/webhook', h(PaymentController.webhook)); // UC-G10 step 8
@@ -220,6 +224,45 @@ router.patch(
   authenticate,
   requirePermission(Permission.APPROVE_REFUND),
   h(RefundController.decide),
+);
+
+// UC-M11 Manage Promotion Codes — pricing is the Manager's (MANAGE_PRICING).
+router.get(
+  '/promotions', // UC-M11 + «include» UC-M19 View Promotion Usage
+  authenticate,
+  requirePermission(Permission.MANAGE_PRICING),
+  h(PromotionController.list),
+);
+router.post(
+  '/promotions', // UC-M20
+  authenticate,
+  requirePermission(Permission.MANAGE_PRICING),
+  validateBody([
+    { field: 'code', required: true, type: 'string' },
+    { field: 'discountType', required: true, type: 'string' },
+    { field: 'discountValue', required: true, type: 'number' },
+    { field: 'validFrom', required: true, type: 'date' },
+    { field: 'validTo', required: true, type: 'date' },
+  ]),
+  h(PromotionController.create),
+);
+router.patch(
+  '/promotions/:id', // UC-M21
+  authenticate,
+  requirePermission(Permission.MANAGE_PRICING),
+  h(PromotionController.update),
+);
+router.patch(
+  '/promotions/:id/status', // UC-M22
+  authenticate,
+  requirePermission(Permission.MANAGE_PRICING),
+  h(PromotionController.setActive),
+);
+router.delete(
+  '/promotions/:id', // UC-M11 — an unused code only
+  authenticate,
+  requirePermission(Permission.MANAGE_PRICING),
+  h(PromotionController.remove),
 );
 
 // ---------------------------------------------------------------------------

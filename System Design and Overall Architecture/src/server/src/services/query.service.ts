@@ -33,6 +33,8 @@ export interface PricedAvailability {
     id: string;
   };
   availableCount: number;
+  /** One room of this type sleeps the whole party. */
+  fitsParty: boolean;
   nights: number;
   subtotal: number;
   tax: number;
@@ -42,28 +44,26 @@ export interface PricedAvailability {
 export class RoomQueries {
   /**
    * UC-G01 steps 5–9 — composes the two «application logic» objects: which
-   * room types are free (AvailabilityCalculator) and what they cost
-   * (PricingRule). Cheapest first.
+   * room types are free (AvailabilityCalculator) and what one room costs
+   * (PricingRule).
+   *
+   * Every type with at least one free room is returned, not only those that
+   * sleep the whole party: a party of six may take three doubles. Types that
+   * fit the party in one room come first, then by price.
    */
   static async searchPriced(
     checkIn: Date,
     checkOut: Date,
-    occupancy: number,
-    roomCount: number,
+    partySize: number,
   ): Promise<PricedAvailability[]> {
-    const available = await AvailabilityCalculator.search(
-      checkIn,
-      checkOut,
-      occupancy,
-      roomCount,
-    );
+    const available = await AvailabilityCalculator.search(checkIn, checkOut, 1, 1);
     const roomTypes = await RoomType.find({
       _id: { $in: available.map((a) => a.roomTypeId) },
     });
 
     const results = available.map((a) => {
       const rt = roomTypes.find((t) => String(t._id) === a.roomTypeId)!;
-      const price = PricingRule.calculate(rt, checkIn, checkOut, roomCount);
+      const price = PricingRule.calculate(rt, checkIn, checkOut, 1);
       return {
         roomType: {
           id: String(rt._id),
@@ -74,6 +74,7 @@ export class RoomQueries {
           images: rt.images,
         },
         availableCount: a.availableCount,
+        fitsParty: rt.capacity >= partySize,
         nights: price.nightlyLines.length,
         subtotal: price.subtotal,
         tax: price.tax,
@@ -81,7 +82,7 @@ export class RoomQueries {
       };
     });
 
-    return results.sort((x, y) => x.total - y.total);
+    return results.sort((x, y) => Number(y.fitsParty) - Number(x.fitsParty) || x.total - y.total);
   }
 
   /** The public room catalogue, cheapest first. */
@@ -111,19 +112,47 @@ export class RoomQueries {
 
 export class BookingQueries {
   /**
-   * UC-G13 — anonymous lookup. The email acts as the shared secret: a booking
-   * code alone must not disclose a guest's reservation.
+   * UC-G13 — anonymous lookup of a whole reservation, by its code or by any
+   * of its rooms' codes. The email acts as the shared secret: a code alone
+   * must not disclose a guest's reservation.
    */
-  static async lookup(code: string, email: string): Promise<IBooking> {
-    const booking = await Booking.findOne({
-      bookingCode: code,
-      'guest.email': email.toLowerCase(),
-    }).populate('roomTypeId');
-
-    if (!booking) {
+  static async lookup(code: string, email: string): Promise<{ reservationCode: string; bookings: IBooking[] }> {
+    const trimmed = code.trim().toUpperCase();
+    const match = await Booking.findOne({
+      $or: [{ bookingCode: trimmed }, { reservationCode: trimmed }],
+      'guest.email': email.trim().toLowerCase(),
+    });
+    if (!match) {
       throw new AppError('NOT_FOUND', 'No booking matches that code and email', 404);
     }
-    return booking;
+    const reservationCode = match.reservationCode ?? match.bookingCode;
+    const bookings = await Booking.find({ reservationCode })
+      .populate('roomTypeId')
+      .sort({ bookingCode: 1 });
+    return { reservationCode, bookings };
+  }
+
+  /** The other rooms of a booking's reservation — for the detail screens. */
+  static async reservationOf(booking: IBooking): Promise<{
+    code: string;
+    rooms: { _id: string; bookingCode: string; status: string; roomType?: string; roomNumber?: string; totalAmount: number }[];
+  }> {
+    const code = booking.reservationCode ?? booking.bookingCode;
+    const siblings = await Booking.find({ reservationCode: code })
+      .populate('roomTypeId', 'name')
+      .populate('roomId', 'roomNumber')
+      .sort({ bookingCode: 1 });
+    return {
+      code,
+      rooms: siblings.map((b) => ({
+        _id: String(b._id),
+        bookingCode: b.bookingCode,
+        status: b.status,
+        roomType: (b.roomTypeId as unknown as { name?: string })?.name,
+        roomNumber: (b.roomId as unknown as { roomNumber?: string } | undefined)?.roomNumber,
+        totalAmount: b.totalAmount,
+      })),
+    };
   }
 
   /** UC-C11 */

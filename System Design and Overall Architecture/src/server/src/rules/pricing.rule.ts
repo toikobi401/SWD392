@@ -81,8 +81,8 @@ export class PricingRule {
   }
 
   /**
-   * UC-G11 Apply Discount Code. The caller must already have validated the
-   * promotion with `promotion.isValidOn(date)` — this method only computes.
+   * UC-G11 Apply Discount Code. The caller must already have checked the
+   * promotion applies (PromotionRule.applicability) — this only computes.
    */
   static discountFor(promotion: IPromotion, subtotal: number): number {
     if (subtotal < promotion.minimumSpend) return 0;

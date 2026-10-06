@@ -36,6 +36,11 @@ export function FrontDeskPage() {
 
   const o = overview.data;
   const dueOutIds = new Set(o?.departures.map((b) => b._id));
+  // "room 2 of 3" — so the desk can put a family's rooms next to each other.
+  const partOf = (b: Booking, list: Booking[]) => {
+    const group = list.filter((x) => (x.reservationCode ?? x.bookingCode) === (b.reservationCode ?? b.bookingCode));
+    return group.length > 1 ? `, room ${group.indexOf(b) + 1} of ${group.length} booked together` : '';
+  };
   const stayingOn = o?.inHouse.filter((b) => !dueOutIds.has(b._id)) ?? [];
 
   return (
@@ -93,7 +98,7 @@ export function FrontDeskPage() {
       {o && (
         <div className="desk-grid">
           <GuestColumn title="Arriving" empty="Every arrival is checked in." rows={o.arrivals}
-            side={() => undefined} meta={(b) => `${rt(b)?.name ?? ''}, ${b.adults} guest${b.adults === 1 ? '' : 's'}, until ${stayDateShort(b.checkOutDate)}`} />
+            side={() => undefined} meta={(b) => `${rt(b)?.name ?? ''}, ${b.adults + b.children} guest${b.adults + b.children === 1 ? '' : 's'}, until ${stayDateShort(b.checkOutDate)}${partOf(b, o.arrivals)}`} />
           <GuestColumn title="Due out" empty="No more departures today." rows={o.departures}
             side={(b) => roomNo(b)} meta={(b) => `${rt(b)?.name ?? ''}, since ${stayDateShort(b.checkInDate)}`} />
           <GuestColumn title="Staying on" empty="No other guests in house." rows={stayingOn}
@@ -196,6 +201,7 @@ export function StaffBookingPage() {
           <dl className="facts">
             <dt>Stay</dt><dd>{stayRange(b.checkInDate, b.checkOutDate)}</dd>
             <dt>Guests</dt><dd>{b.adults} adult{b.adults === 1 ? '' : 's'}{b.children ? `, ${b.children} child${b.children === 1 ? '' : 'ren'}` : ''}</dd>
+            {b.occupantName && (<><dt>Staying</dt><dd>{b.occupantName}</dd></>)}
             <dt>Phone</dt><dd>{b.guest.phone}</dd>
             <dt>Email</dt><dd style={{ wordBreak: 'break-all' }}>{b.guest.email}</dd>
             {b.guest.specialRequest && (<><dt>Request</dt><dd>{b.guest.specialRequest}</dd></>)}
@@ -204,6 +210,22 @@ export function StaffBookingPage() {
             {b.actualCheckInAt && (<><dt>Checked in</dt><dd>{when(b.actualCheckInAt)}</dd></>)}
           </dl>
           {folioId.data && <Link to={`/staff/folios/${folioId.data}`} className="btn secondary block">Open folio</Link>}
+          {b.reservation && b.reservation.rooms.length > 1 && (
+            <div className="stack tight" style={{ marginTop: 8 }}>
+              <h3>Booked together ({b.reservation.rooms.length} rooms)</h3>
+              <p className="xs muted">{b.reservation.code}. Each room is checked in and out on its own.</p>
+              <ul className="sibling-rooms">
+                {b.reservation.rooms.map((r) => (
+                  <li key={r._id} className={r._id === b._id ? 'current' : ''}>
+                    {r._id === b._id
+                      ? <span>{r.roomType}{r.roomNumber ? `, ${r.roomNumber}` : ''}</span>
+                      : <Link to={`/staff/bookings/${r._id}`}>{r.roomType}{r.roomNumber ? `, ${r.roomNumber}` : ''}</Link>}
+                    <Status kind="booking" value={r.status} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </aside>
       </div>
     </div>
@@ -215,7 +237,8 @@ function CheckInPanel({ booking, onDone }: { booking: Booking; onDone: (roomNumb
   const rooms = useQuery({ queryKey: ['allocatable', roomTypeId], queryFn: () => deskApi.allocatable(roomTypeId), staleTime: 0 });
   const [room, setRoom] = useState<AllocatableRoom | null>(null);
   const [identity, setIdentity] = useState<CheckInRequest['identity']>({
-    documentType: 'NATIONAL_ID', documentNumber: '', fullName: booking.guest.fullName, dateOfBirth: '', expiryDate: '',
+    // The person staying in this room, if named, otherwise the booker.
+    documentType: 'NATIONAL_ID', documentNumber: '', fullName: booking.occupantName ?? booking.guest.fullName, dateOfBirth: '', expiryDate: '',
   });
   const checkIn = useMutation({
     mutationFn: () => deskApi.checkIn({ bookingId: booking._id, identity, roomId: room!.id, roomVersion: room!.version }),
@@ -254,7 +277,12 @@ function CheckInPanel({ booking, onDone }: { booking: Booking; onDone: (roomNumb
           </label>
         </div>
         <label className="field">
-          Name on the document <span className="hint">Must match the booking.</span>
+          Name on the document{' '}
+          <span className="hint">
+            {booking.occupantName
+              ? `Must be ${booking.occupantName} (staying) or ${booking.guest.fullName} (booked).`
+              : 'Must match the booking.'}
+          </span>
           <input value={identity.fullName} onChange={set('fullName')} required />
         </label>
         <div className="form-row">

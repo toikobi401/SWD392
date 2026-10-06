@@ -101,6 +101,21 @@ export const PAYMENT_METHOD: Record<string, string> = {
   LOYALTY_POINTS: 'Points',
 };
 
+export const PROMOTION_STATUS: Record<string, string> = {
+  ACTIVE: 'Active',
+  SCHEDULED: 'Starts later',
+  EXPIRED: 'Ended',
+  USED_UP: 'Used up',
+  INACTIVE: 'Switched off',
+};
+
+/** "20 % off" or "300.000 ₫ off". */
+export const discountLabel = (p: { discountType: string; discountValue: number }) =>
+  p.discountType === 'PERCENTAGE' ? `${p.discountValue} % off` : `${money(p.discountValue)} off`;
+
+/** A hotel calendar date (YYYY-MM-DD) for display, e.g. "28 Dec 2026". */
+export const calendarDate = (ymd?: string) => (ymd ? dayFmt.format(new Date(`${ymd}T00:00:00Z`)) : '—');
+
 export const ACCOUNT_STATUS: Record<string, string> = {
   PENDING_VERIFICATION: 'Email not verified',
   ACTIVE: 'Active',

@@ -217,7 +217,7 @@
                     <mxGeometry x="1010" y="160" width="180" height="65" as="geometry"/>
                 </mxCell>
                 <mxCell id="pRpt" value="reporting&#xa;ReportingService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#D9F2E1;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
-                    <mxGeometry x="110" y="250" width="140" height="60" as="geometry"/>
+                    <mxGeometry x="1010" y="250" width="140" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="rulesG" value="server/rules — «application logic»" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=6;fillColor=#F3E8FD;strokeColor=#A142F4;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="80" y="520" width="1140" height="180" as="geometry"/>
@@ -242,6 +242,21 @@
                 </mxCell>
                 <mxCell id="rInv" value="InvoiceNumberGenerator" style="shape=folder;fontStyle=1;spacingTop=8;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#E8D5FB;strokeColor=#A142F4;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="460" y="640" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="pPrice" value="pricing&#xa;PromotionService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#D9F2E1;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="110" y="250" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="rPromo" value="PromotionRule" style="shape=folder;fontStyle=1;spacingTop=8;tabWidth=50;tabHeight=14;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#E8D5FB;strokeColor=#A142F4;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="110" y="640" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="be20" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endSize=12;strokeColor=#A142F4;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="pPrice" target="rPromo" edge="1">
+                    <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="95" y="280"/><mxPoint x="95" y="665"/></Array></mxGeometry>
+                </mxCell>
+                <mxCell id="be21" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endSize=12;strokeColor=#A142F4;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" parent="1" source="pPrice" target="rPrice" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="be22" value="«use»" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endSize=12;dashed=1;strokeColor=#34A853;fontSize=10;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="pBook" target="pPrice" edge="1">
+                    <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="286" y="280"/></Array></mxGeometry>
                 </mxCell>
                 <mxCell id="be1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endSize=12;strokeColor=#A142F4;exitX=0.3;exitY=1;exitDx=0;exitDy=0;" parent="1" source="pBook" target="rPrice" edge="1">
                     <mxGeometry relative="1" as="geometry"/>

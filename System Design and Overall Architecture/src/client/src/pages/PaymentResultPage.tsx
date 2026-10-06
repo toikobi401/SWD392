@@ -83,8 +83,10 @@ export default function PaymentResultPage({ cancelled = false }: { cancelled?: b
         <h1>Booking confirmed</h1>
         <div className="notice ok stack tight">
           <p>
-            Your payment was received and booking <strong>{result.bookingCode}</strong> is
-            confirmed.
+            Your payment was received and{' '}
+            {result.rooms.length > 1
+              ? <>all {result.rooms.length} rooms of booking <strong>{result.reservationCode}</strong> are confirmed.</>
+              : <>booking <strong>{result.bookingCode}</strong> is confirmed.</>}
           </p>
           <p>A confirmation has been sent to your email.</p>
         </div>
@@ -114,7 +116,7 @@ export default function PaymentResultPage({ cancelled = false }: { cancelled?: b
         <p className="notice warn">
           payOS has not confirmed this payment yet. If money has left your account, it will
           be matched automatically and you will receive a confirmation email. Reference:{' '}
-          <strong>{result.bookingCode}</strong>
+          <strong>{result.reservationCode ?? result.bookingCode}</strong>
         </p>
       ) : (
         <p className="notice info">

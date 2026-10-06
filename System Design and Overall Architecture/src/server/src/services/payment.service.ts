@@ -19,13 +19,14 @@
 import { randomInt, randomUUID } from 'crypto';
 import { Types } from 'mongoose';
 import { Payment, IPayment, Folio, DrawerSession } from '../models/billing.model';
-import { Booking, InventoryHold } from '../models/booking.model';
+import { Booking, InventoryHold, Promotion } from '../models/booking.model';
 import { BookingStatus, PaymentMethod, PaymentStatus } from '../models/enums';
 import { BookingStateMachine } from '../rules/booking-state-machine';
 import {
   PaymentGatewayProxy,
   PAYOS_DESCRIPTION_MAX,
 } from '../proxies/payment-gateway.proxy';
+import { NotificationProxy } from '../proxies/notification.proxy';
 import { AuditService } from './audit.service';
 import { AppError } from '../utils/app-error';
 
@@ -35,7 +36,7 @@ const LOCAL_METHODS = [PaymentMethod.CASH, PaymentMethod.VOUCHER];
 export interface ChargeCommand {
   amount: number;
   method: PaymentMethod;
-  /** Short human reference; trimmed to payOS's 9-character limit. */
+  /** Short human reference; trimmed to the payOS 9-character limit. */
   reference: string;
   bookingId?: string;
   folioId?: string;
@@ -48,17 +49,37 @@ export interface ChargeCommand {
   buyer?: { name?: string; email?: string; phone?: string };
 }
 
+/** One room of a reservation, as the payment sees it. */
+export interface ReservationLine {
+  bookingId: string;
+  amount: number;
+  /** Shown to the guest on the payOS page, e.g. "Deluxe Sea View". */
+  label: string;
+}
+
+export interface ReservationChargeCommand {
+  lines: ReservationLine[];
+  method: PaymentMethod;
+  reference: string;
+  expiresAt?: Date;
+  buyer?: { name?: string; email?: string; phone?: string };
+}
+
 export interface ReconcileResult {
   orderCode: number;
+  /** The reservation as a whole: PAID only when every room is paid. */
   paymentStatus: PaymentStatus;
   gatewayStatus: string;
+  reservationCode?: string;
+  /** Kept for single-room callers: the first room's booking. */
   bookingStatus?: BookingStatus;
   bookingCode?: string;
+  rooms: { bookingCode: string; status: BookingStatus }[];
 }
 
 export class PaymentService {
   /**
-   * UC-G10 Normal Flow, and UC-R15 for a desk payment.
+   * UC-G10 / UC-R15 — one payment (a desk payment, or a single online charge).
    *
    * The Payment row — including its payOS orderCode — is written PENDING
    * *before* the gateway is called. If the call then times out, the row is
@@ -114,39 +135,105 @@ export class PaymentService {
       return (await this.transition(payment._id, true, 'LOCAL')) ?? payment;
     }
 
-    const orderCode = payment.gatewayOrderCode!;
+    const [result] = await this.openPayOSLink([payment], {
+      reference: command.reference,
+      expiresAt: command.expiresAt,
+      buyer: command.buyer,
+    });
+    return result;
+  }
+
+  /**
+   * UC-G07/UC-G10 — pays a multi-room reservation with ONE payOS link.
+   *
+   * Each room gets its own Payment row (so refunds, folios and invoices stay
+   * per room), all carrying the same payOS orderCode. The guest scans one QR
+   * for the total; the webhook then settles every room's payment together.
+   */
+  static async chargeReservation(command: ReservationChargeCommand): Promise<IPayment[]> {
+    if (!command.lines.length) {
+      throw new AppError('NO_ROOMS', 'A reservation needs at least one room', 400);
+    }
+    if (command.lines.some((l) => !Number.isInteger(l.amount) || l.amount <= 0)) {
+      throw new AppError('INVALID_AMOUNT', 'Every room amount must be a positive integer', 400);
+    }
+    if (LOCAL_METHODS.includes(command.method)) {
+      throw new AppError('INVALID_PAYMENT_METHOD', 'A reservation is paid online through payOS', 400);
+    }
+
+    const orderCode = this.newOrderCode();
+    const baseKey = randomUUID();
+    const payments = await Payment.insertMany(
+      command.lines.map((l, i) => ({
+        bookingId: l.bookingId,
+        amount: l.amount,
+        method: command.method,
+        status: PaymentStatus.PENDING,
+        idempotencyKey: `${baseKey}:${i}`,
+        gatewayOrderCode: orderCode,
+        expiresAt: command.expiresAt,
+      })),
+    );
+
+    return this.openPayOSLink(payments as unknown as IPayment[], {
+      reference: command.reference,
+      expiresAt: command.expiresAt,
+      buyer: command.buyer,
+      items: command.lines.map((l) => ({ name: l.label.slice(0, 50), quantity: 1, price: l.amount })),
+    });
+  }
+
+  /**
+   * Creates the payOS link for payments that share one orderCode and records
+   * the outcome on all of them — the one path for single and multi-room.
+   */
+  private static async openPayOSLink(
+    payments: IPayment[],
+    options: {
+      reference: string;
+      expiresAt?: Date;
+      buyer?: { name?: string; email?: string; phone?: string };
+      items?: { name: string; quantity: number; price: number }[];
+    },
+  ): Promise<IPayment[]> {
+    const orderCode = payments[0].gatewayOrderCode!;
+    const total = payments.reduce((sum, p) => sum + p.amount, 0);
     const frontend = (process.env.FRONTEND_URL ?? 'http://localhost:3001').replace(/\/$/, '');
+    const failAll = (message?: string) =>
+      Promise.all(payments.map(async (p) => (await this.transition(p._id, false, undefined, message)) ?? p));
 
     let result;
     try {
       result = await PaymentGatewayProxy.charge({
         orderCode,
-        amount: command.amount,
-        description: this.description(command.reference),
+        amount: total,
+        description: this.description(options.reference),
         // orderCode in the PATH, not the query: payOS appends its own query
         // parameters to these URLs, so ours must not collide with them.
         returnUrl: `${frontend}/payment/result/${orderCode}`,
         cancelUrl: `${frontend}/payment/cancelled/${orderCode}`,
-        expiresAt: command.expiresAt,
-        buyer: command.buyer,
+        expiresAt: options.expiresAt,
+        buyer: options.buyer,
+        items: options.items,
       });
     } catch (err) {
       // Timeout: the link may exist — stay PENDING, reconcile later.
-      if ((err as AppError).code === 'GATEWAY_TIMEOUT') return payment;
+      if ((err as AppError).code === 'GATEWAY_TIMEOUT') return payments;
       // Unreachable / misconfigured: nothing was created, so it is a failure.
-      await this.transition(payment._id, false, undefined, (err as Error).message);
+      await failAll((err as Error).message);
       throw err;
     }
 
     if (result.outcome === 'DECLINED') {
       // UC-G10 exception 1.0.E1 — payOS refused to create the link.
-      return (await this.transition(payment._id, false, undefined, result.message)) ?? payment;
+      return failAll(result.message);
     }
 
-    payment.checkoutUrl = result.redirectUrl;
-    payment.qrCode = result.qrCode;
-    await payment.save();
-    return payment;
+    await Payment.updateMany(
+      { gatewayOrderCode: orderCode },
+      { $set: { checkoutUrl: result.redirectUrl, qrCode: result.qrCode } },
+    );
+    return Payment.find({ _id: { $in: payments.map((p) => p._id) } }).sort({ _id: 1 });
   }
 
   /**
@@ -240,12 +327,12 @@ export class PaymentService {
    * payOS (or a signed webhook) may move money.
    */
   static async reconcile(orderCode: number): Promise<ReconcileResult> {
-    const payment = await Payment.findOne({ gatewayOrderCode: orderCode });
-    if (!payment) throw new AppError('NOT_FOUND', 'No payment with that order code', 404);
+    const payments = await Payment.find({ gatewayOrderCode: orderCode }).sort({ _id: 1 });
+    if (!payments.length) throw new AppError('NOT_FOUND', 'No payment with that order code', 404);
 
-    let gatewayStatus: string = payment.status;
+    let gatewayStatus: string = payments[0].status;
 
-    if (payment.status === PaymentStatus.PENDING) {
+    if (payments.some((p) => p.status === PaymentStatus.PENDING)) {
       const link = await PaymentGatewayProxy.getStatus(orderCode);
       gatewayStatus = link.status;
 
@@ -262,28 +349,38 @@ export class PaymentService {
       // PENDING / PROCESSING / UNDERPAID: nothing to apply yet.
     }
 
-    const [fresh, booking] = await Promise.all([
-      Payment.findById(payment._id),
-      Booking.findById(payment.bookingId),
-    ]);
+    const fresh = await Payment.find({ gatewayOrderCode: orderCode }).sort({ _id: 1 });
+    const bookings = await Booking.find({ _id: { $in: fresh.map((p) => p.bookingId) } }).sort({ bookingCode: 1 });
 
+    // The reservation is paid only when every room is; failed if any failed.
+    const statuses = new Set(fresh.map((p) => p.status));
+    const paymentStatus = statuses.has(PaymentStatus.PENDING)
+      ? PaymentStatus.PENDING
+      : statuses.has(PaymentStatus.FAILED)
+        ? PaymentStatus.FAILED
+        : PaymentStatus.PAID;
+
+    // Statuses and codes only — never guest details: the orderCode is not a secret.
     return {
       orderCode,
-      paymentStatus: fresh!.status,
+      paymentStatus,
       gatewayStatus,
-      bookingStatus: booking?.status,
-      bookingCode: booking?.bookingCode,
+      reservationCode: bookings[0]?.reservationCode ?? bookings[0]?.bookingCode,
+      bookingStatus: bookings[0]?.status,
+      bookingCode: bookings[0]?.bookingCode,
+      rooms: bookings.map((b) => ({ bookingCode: b.bookingCode, status: b.status })),
     };
   }
 
   /**
    * The single place a gateway outcome is applied — shared by the webhook and
-   * the reconciler.
+   * the reconciler. One payOS link may pay several rooms (a multi-room
+   * reservation): every Payment carrying the orderCode is settled together.
    *
-   * Exactly-once: the PENDING → PAID/FAILED change is a conditional atomic
-   * update, so when the webhook and the returning guest arrive together only
-   * one of them wins, and the folio, the booking and the audit trail are
-   * updated once.
+   * Exactly-once: each PENDING → PAID/FAILED change is a conditional atomic
+   * update, so when the webhook and the returning guest arrive together each
+   * room's payment — and its folio, booking and audit entry — is applied once,
+   * and the confirmation email goes out once (a claimed `notifiedAt` flag).
    */
   static async confirmFromGateway(outcome: {
     orderCode: number;
@@ -291,33 +388,38 @@ export class PaymentService {
     reference?: string;
     amount?: number;
   }): Promise<IPayment | null> {
-    const payment = await Payment.findOne({ gatewayOrderCode: outcome.orderCode });
-    if (!payment) return null; // e.g. payOS's sample webhook
-    if (payment.status !== PaymentStatus.PENDING) return payment; // already applied
+    const payments = await Payment.find({ gatewayOrderCode: outcome.orderCode }).sort({ _id: 1 });
+    if (!payments.length) return null; // e.g. the payOS sample webhook
+    const pending = payments.filter((p) => p.status === PaymentStatus.PENDING);
+    if (!pending.length) return payments[0]; // already applied
 
-    // A paid amount that differs from what we asked for is never settled
-    // automatically: it is either tampering or a partial (UNDERPAID) transfer.
-    if (outcome.approved && outcome.amount !== undefined && outcome.amount !== payment.amount) {
+    // The link was for the sum of every room. A different amount is never
+    // settled automatically: it is either tampering or an UNDERPAID transfer.
+    const expected = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (outcome.approved && outcome.amount !== undefined && outcome.amount !== expected) {
       await AuditService.record({
         action: 'PAYMENT_AMOUNT_MISMATCH',
         entityType: 'Payment',
-        entityId: String(payment._id),
-        after: { expected: payment.amount, received: outcome.amount, orderCode: outcome.orderCode },
+        entityId: String(payments[0]._id),
+        after: { expected, received: outcome.amount, orderCode: outcome.orderCode, rooms: payments.length },
       });
-      return payment;
+      return payments[0];
     }
 
-    const updated = await this.transition(
-      payment._id,
-      outcome.approved,
-      outcome.reference ?? String(outcome.orderCode),
-    );
-    if (!updated) return Payment.findById(payment._id); // lost the race — already applied
+    const ref = outcome.reference ?? String(outcome.orderCode);
+    const won: IPayment[] = [];
+    for (const p of pending) {
+      const updated = await this.transition(p._id, outcome.approved, ref);
+      if (updated) won.push(updated); // null: another caller applied this one
+    }
 
-    // Advance the booking this payment was holding open (§6.4): an online
-    // booking waits in PENDING until this moment.
-    const booking = await Booking.findById(updated.bookingId);
-    if (booking && booking.status === BookingStatus.PENDING) {
+    // Advance the bookings whose payments THIS call settled (§6.4). Online
+    // bookings wait in PENDING until this moment.
+    const bookings = await Booking.find({
+      _id: { $in: won.map((p) => p.bookingId) },
+      status: BookingStatus.PENDING,
+    });
+    for (const booking of bookings) {
       booking.status = BookingStateMachine.next(
         booking.status,
         outcome.approved ? 'PAYMENT_CAPTURED' : 'PAYMENT_FAILED',
@@ -331,7 +433,41 @@ export class PaymentService {
       await InventoryHold.deleteMany({ bookingId: booking._id });
     }
 
-    return updated;
+    if (outcome.approved) await this.sendConfirmationOnce(outcome.orderCode);
+
+    return won[0] ?? (await Payment.findById(payments[0]._id));
+  }
+
+  /**
+   * Finishes a paid reservation exactly once: counts the voucher use and
+   * sends the UC-G12 confirmation. Concurrent confirmations may each settle
+   * some rooms, so this is guarded by atomically claiming `notifiedAt` on the
+   * reservation's first payment; only the caller that claims it proceeds.
+   *
+   * The voucher is counted here, on payment — not when the booking is made —
+   * so abandoned checkouts never use up a limited voucher.
+   */
+  private static async sendConfirmationOnce(orderCode: number): Promise<void> {
+    const payments = await Payment.find({ gatewayOrderCode: orderCode }).sort({ _id: 1 });
+    if (payments.some((p) => p.status !== PaymentStatus.PAID)) return;
+
+    const claimed = await Payment.findOneAndUpdate(
+      { _id: payments[0]._id, notifiedAt: { $exists: false } },
+      { $set: { notifiedAt: new Date() } },
+    );
+    if (!claimed) return;
+
+    const bookings = await Booking.find({ _id: { $in: payments.map((p) => p.bookingId) } })
+      .populate('roomTypeId')
+      .sort({ bookingCode: 1 });
+
+    // One reservation is one use of its voucher, however many rooms it has.
+    const promotionId = bookings.find((b) => b.promotionId)?.promotionId;
+    if (promotionId) await Promotion.updateOne({ _id: promotionId }, { $inc: { usedCount: 1 } });
+
+    await NotificationProxy.sendReservationConfirmation(bookings).catch((err) =>
+      console.error('[UC-G12] confirmation delivery failed, queued for retry', err),
+    );
   }
 
   /**

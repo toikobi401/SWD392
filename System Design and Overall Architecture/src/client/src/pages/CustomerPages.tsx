@@ -53,9 +53,54 @@ export function BookingLookupPage() {
       <div style={{ marginTop: 20 }}>
         {result.isFetching && <Loading label="Looking it up…" />}
         <ErrorNotice error={result.error} />
-        {result.data && <BookingSummary booking={result.data} />}
+        {result.data && <ReservationView reservationCode={result.data.reservationCode} bookings={result.data.bookings} />}
       </div>
     </main>
+  );
+}
+
+/** A reservation of one or more rooms, as the guest sees it. */
+function ReservationView({ reservationCode, bookings }: { reservationCode: string; bookings: Booking[] }) {
+  if (bookings.length === 1) return <BookingSummary booking={bookings[0]} />;
+  const first = bookings[0];
+  const live = bookings.filter((b) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW');
+  return (
+    <div className="panel stack">
+      <div className="row between">
+        <h2>{bookings.length} rooms</h2>
+        <span className="muted small">{reservationCode}</span>
+      </div>
+      <dl className="facts">
+        <dt>Stay</dt>
+        <dd>{stayRange(first.checkInDate, first.checkOutDate)}</dd>
+        <dt>Booked by</dt>
+        <dd>{first.guest.fullName}</dd>
+        <dt>Total</dt>
+        <dd className="money">{money(live.reduce((n, b) => n + b.totalAmount, 0))}</dd>
+      </dl>
+      <div className="table-wrap">
+        <table className="data">
+          <thead><tr><th>Room</th><th>Guests</th><th>Code</th><th>Status</th><th className="num">Price</th></tr></thead>
+          <tbody>
+            {bookings.map((b) => (
+              <tr key={b._id}>
+                <td className="nowrap">
+                  {roomTypeName(b)}
+                  {b.occupantName && <div className="xs muted">for {b.occupantName}</div>}
+                </td>
+                <td className="nowrap">{b.adults} adult{b.adults === 1 ? '' : 's'}{b.children ? `, ${b.children} child${b.children === 1 ? '' : 'ren'}` : ''}</td>
+                <td className="muted nowrap">{b.bookingCode}</td>
+                <td><Status kind="booking" value={b.status} /></td>
+                <td className="num money">{money(b.totalAmount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {first.status === 'CONFIRMED' && (
+        <p className="muted small">Check-in from 14:00 on {stayDate(first.checkInDate)}. Each room is checked in on its own, so guests may arrive at different times.</p>
+      )}
+    </div>
   );
 }
 
@@ -91,10 +136,12 @@ export function MyBookingsPage() {
   const { profile } = useAuth();
   const { data, isLoading, error } = useQuery({ queryKey: ['my-bookings'], queryFn: bookingApi.mine });
 
+  // One row per reservation — rooms booked together belong together.
+  const groups = groupReservations(data ?? []);
+  const isLive = (g: Booking[]) => g.some((b) => b.status === 'CONFIRMED' || b.status === 'CHECKED_IN' || b.status === 'PENDING');
   // Soonest stay first for what is coming up; most recent first for history.
-  const upcoming = (data?.filter((b) => b.status === 'CONFIRMED' || b.status === 'CHECKED_IN' || b.status === 'PENDING') ?? [])
-    .sort((a, b) => a.checkInDate.localeCompare(b.checkInDate));
-  const past = data?.filter((b) => !upcoming.includes(b)) ?? [];
+  const upcoming = groups.filter(isLive).sort((a, b) => a[0].checkInDate.localeCompare(b[0].checkInDate));
+  const past = groups.filter((g) => !isLive(g));
 
   return (
     <main className="site-main">
@@ -126,23 +173,47 @@ export function MyBookingsPage() {
   );
 }
 
-function BookingTable({ rows }: { rows: Booking[] }) {
+function groupReservations(bookings: Booking[]): Booking[][] {
+  const byCode = new Map<string, Booking[]>();
+  for (const b of bookings) {
+    const code = b.reservationCode ?? b.bookingCode;
+    byCode.set(code, [...(byCode.get(code) ?? []), b]);
+  }
+  return [...byCode.values()].map((g) => g.sort((a, b) => a.bookingCode.localeCompare(b.bookingCode)));
+}
+
+/** "Deluxe Sea View × 2, Family Suite" */
+function roomsLabel(group: Booking[]): string {
+  const counts = new Map<string, number>();
+  group.forEach((b) => counts.set(roomTypeName(b), (counts.get(roomTypeName(b)) ?? 0) + 1));
+  return [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} × ${n}` : name)).join(', ');
+}
+
+function BookingTable({ rows }: { rows: Booking[][] }) {
   return (
     <div className="panel flush table-wrap">
       <table className="data">
         <thead>
-          <tr><th>Room</th><th>Stay</th><th>Code</th><th>Status</th><th className="num">Total</th></tr>
+          <tr><th>Rooms</th><th>Stay</th><th>Code</th><th>Status</th><th className="num">Total</th></tr>
         </thead>
         <tbody>
-          {rows.map((b) => (
-            <tr key={b._id}>
-              <td><Link to={`/bookings/${b._id}`}>{roomTypeName(b)}</Link></td>
-              <td className="nowrap">{stayRange(b.checkInDate, b.checkOutDate)}</td>
-              <td className="nowrap muted">{b.bookingCode}</td>
-              <td><Status kind="booking" value={b.status} /></td>
-              <td className="num money">{money(b.totalAmount)}</td>
-            </tr>
-          ))}
+          {rows.map((g) => {
+            const first = g[0];
+            const statuses = [...new Set(g.map((b) => b.status))];
+            return (
+              <tr key={first.reservationCode ?? first._id}>
+                <td><Link to={`/bookings/${first._id}`}>{roomsLabel(g)}</Link></td>
+                <td className="nowrap">{stayRange(first.checkInDate, first.checkOutDate)}</td>
+                <td className="nowrap muted">{first.reservationCode ?? first.bookingCode}</td>
+                <td>
+                  <div className="row" style={{ gap: 4 }}>
+                    {statuses.map((st) => <Status key={st} kind="booking" value={st} />)}
+                  </div>
+                </td>
+                <td className="num money">{money(g.reduce((n, b) => n + b.totalAmount, 0))}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -187,9 +258,32 @@ export function BookingDetailPage() {
 
         <BookingSummary booking={b} />
 
+        {b.reservation && b.reservation.rooms.length > 1 && (
+          <div className="panel stack tight">
+            <div className="row between">
+              <h3>Booked together</h3>
+              <span className="muted small">{b.reservation.code}</span>
+            </div>
+            <ul className="sibling-rooms">
+              {b.reservation.rooms.map((r) => (
+                <li key={r._id} className={r._id === b._id ? 'current' : ''}>
+                  {r._id === b._id ? <span>{r.roomType} (this room)</span> : <Link to={`/bookings/${r._id}`}>{r.roomType}</Link>}
+                  <span className="row" style={{ gap: 10 }}>
+                    <Status kind="booking" value={r.status} />
+                    <span className="money">{money(r.totalAmount)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {b.status === 'CONFIRMED' && (
           <div className="panel stack tight">
-            <h3>Cancel this stay</h3>
+            <h3>{b.reservation && b.reservation.rooms.length > 1 ? 'Cancel this room' : 'Cancel this stay'}</h3>
+            {b.reservation && b.reservation.rooms.length > 1 && (
+              <p className="small">Only this room is cancelled — the other rooms stay booked.</p>
+            )}
             <p className="small muted">
               {b.nonRefundable
                 ? 'This booking was made on a non-refundable rate, so no money is returned if you cancel.'

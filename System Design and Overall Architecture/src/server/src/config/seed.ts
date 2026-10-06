@@ -11,6 +11,7 @@
 import bcrypt from 'bcryptjs';
 import { Role, User, Customer, Employee } from '../models/user.model';
 import { RoomType, Room, Service, Promotion, LoyaltyAccount } from '../models/booking.model';
+import { hotelDateOf, hotelDayEnd, hotelDayStart } from '../utils/hotel-time';
 import { AccountStatus, DiscountType, Permission, RoleName } from '../models/enums';
 
 const P = Permission;
@@ -109,14 +110,16 @@ export async function seedCatalogue(): Promise<void> {
     { name: 'Laundry', price: 100_000, description: 'Per bag' },
   ]);
 
-  const now = new Date();
+  const today = hotelDateOf(new Date());
   await Promotion.create({
     code: 'WELCOME10',
-    description: '10 % off your first stay',
+    description: '10 % off your stay',
     discountType: DiscountType.PERCENTAGE,
     discountValue: 10,
-    validFrom: now,
-    validTo: new Date(now.getTime() + 365 * 86_400_000),
+    // Hotel days, as the Manager's form sets them (UC-M20).
+    validFrom: hotelDayStart(today),
+    validTo: hotelDayEnd(hotelDateOf(new Date(Date.now() + 365 * 86_400_000))),
+    isPublic: true,
   });
 }
 

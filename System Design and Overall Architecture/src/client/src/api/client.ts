@@ -85,9 +85,12 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${accessToken}`;
         return api.request(original);
       } catch {
-        // The refresh token is dead too — the session is genuinely over.
+        // The refresh token is dead too — the session is over. Forget it, but
+        // do NOT redirect: a returning guest browsing rooms with an old token
+        // must not be thrown onto the sign-in page. Pages that need a session
+        // redirect on their own (RequireAuth); public pages just carry on.
         tokenStore.clear();
-        window.location.href = '/login';
+        throw new ApiError('SESSION_EXPIRED', 'Your session has ended — please sign in again', 401);
       }
     }
 

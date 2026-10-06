@@ -74,7 +74,10 @@ export interface Room {
 export interface SearchResultItem {
   roomType: { id: string; name: string; description: string; capacity: number; amenities: string[]; images: string[] };
   availableCount: number;
+  /** One room of this type sleeps the whole party. */
+  fitsParty: boolean;
   nights: number;
+  /** Price of ONE room for the stay. */
   subtotal: number;
   tax: number;
   total: number;
@@ -114,9 +117,20 @@ export interface GuestDetails {
   specialRequest?: string;
 }
 
+/** The rooms booked together with a booking (GET /bookings/:id). */
+export interface ReservationSummary {
+  code: string;
+  rooms: { _id: string; bookingCode: string; status: BookingStatus; roomType?: string; roomNumber?: string; totalAmount: number }[];
+}
+
 export interface Booking {
   _id: string;
   bookingCode: string;
+  /** Shared by every room booked together; equals bookingCode for a single room. */
+  reservationCode?: string;
+  reservation?: ReservationSummary;
+  /** Who sleeps in this room when it is not the booker. */
+  occupantName?: string;
   customerId?: string;
   guest: GuestDetails;
   checkInDate: string;
@@ -138,20 +152,28 @@ export interface Booking {
   roomId?: Room | string | null;
 }
 
-export interface CreateBookingRequest {
+/** One room in a booking request, with who sleeps in it. */
+export interface RoomRequest {
   roomTypeId: string;
+  adults: number;
+  children: number;
+  /** Optional: who stays in this room, if not the booker. */
+  occupantName?: string;
+}
+
+export interface CreateBookingRequest {
+  /** One or more rooms (BR-08: at most 5), all for the same dates. */
+  rooms: RoomRequest[];
   checkInDate: string;
   checkOutDate: string;
-  adults: number;
-  children?: number;
-  roomCount?: number;
   guest: GuestDetails;
-  addOnServices?: { serviceId: string; quantity: number }[];
   voucherCode?: string;
   paymentMethod: PaymentMethod;
 }
 
 export interface BookingConfirmation {
+  reservationCode: string;
+  rooms: { bookingCode: string; roomTypeId: string; adults: number; children: number; total: number }[];
   bookingCode: string;
   status: BookingStatus;
   total: number;
@@ -266,10 +288,13 @@ export interface DeskPaymentResult {
 
 export interface ReconcileResult {
   orderCode: number;
+  /** The whole reservation: PAID only when every room is paid. */
   paymentStatus: PaymentStatus;
   gatewayStatus: string;
+  reservationCode?: string;
   bookingStatus?: BookingStatus;
   bookingCode?: string;
+  rooms: { bookingCode: string; status: BookingStatus }[];
 }
 
 // --- People & approvals -------------------------------------------------------
@@ -345,6 +370,55 @@ export interface AuditEntry {
   before?: Record<string, unknown>;
   ipAddress?: string;
   timestamp: string;
+}
+
+// ---- Promotion codes (UC-M11, UC-G06, UC-G11) -----------------------------
+
+export type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT';
+export type PromotionStatus = 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'USED_UP' | 'INACTIVE';
+
+/** What the Manager fills in. Dates are hotel calendar dates, YYYY-MM-DD. */
+export interface PromotionForm {
+  code: string;
+  description: string;
+  discountType: DiscountType;
+  discountValue: number;
+  validFrom: string;
+  validTo: string;
+  /** 0 = unlimited. */
+  usageLimit: number;
+  minimumSpend: number;
+  isPublic: boolean;
+}
+
+export interface Promotion extends PromotionForm {
+  id: string;
+  usedCount: number;
+  isActive: boolean;
+  status: PromotionStatus;
+  usage: { reservations: number; rooms: number; discountGiven: number; revenue: number };
+  /** Terms that can no longer change (BR-57). */
+  lockedFields: (keyof PromotionForm)[];
+  deletable: boolean;
+  createdAt: string;
+}
+
+export interface PublicOffer {
+  code: string;
+  description: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minimumSpend: number;
+  validTo: string;
+}
+
+export interface VoucherPreview {
+  code: string;
+  description: string;
+  discountType: DiscountType;
+  discountValue: number;
+  minimumSpend: number;
+  discount: number;
 }
 
 export interface ApiErrorBody {

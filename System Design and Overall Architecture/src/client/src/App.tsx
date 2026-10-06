@@ -15,6 +15,7 @@ import { AccountPage, BookingDetailPage, BookingLookupPage, MyBookingsPage } fro
 import { FolioPage, FrontDeskPage, StaffBookingPage } from './pages/DeskPages';
 import RoomRackPage from './pages/RoomRackPage';
 import { ApprovalsPage, MyLeavePage } from './pages/StaffPages';
+import PromotionsPage from './pages/PromotionsPage';
 import { AccountsPage, AuditLogPage, PaymentSettingsPage, RolesPage } from './pages/AdminPages';
 import { useAuth, homeFor } from './auth/AuthContext';
 
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="bookings/:id" element={<RequirePermission permission="BOOKING_READ"><StaffBookingPage /></RequirePermission>} />  {/* UC-R06/R09 */}
               <Route path="folios/:id" element={<RequirePermission permission="BOOKING_READ"><FolioPage /></RequirePermission>} />  {/* UC-R15/R19 */}
               <Route path="approvals" element={<RequirePermission permission={['APPROVE_LEAVE', 'APPROVE_REFUND']}><ApprovalsPage /></RequirePermission>} />  {/* UC-M06/M14 */}
+              <Route path="promotions" element={<RequirePermission permission="MANAGE_PRICING"><PromotionsPage /></RequirePermission>} />  {/* UC-M11, M19..M22 */}
               <Route path="leave" element={<MyLeavePage />} />                                          {/* UC-E15/E16 */}
               <Route path="account" element={<AccountPage inConsole />} />
               <Route path="admin/accounts" element={<RequirePermission permission="MANAGE_ACCOUNTS"><AccountsPage /></RequirePermission>} />  {/* UC-A01..A08 */}

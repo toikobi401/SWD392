@@ -36,6 +36,37 @@ export class NotificationProxy {
     });
   }
 
+  /**
+   * UC-G12 for a whole reservation — one email listing every room, sent when
+   * payOS confirms the payment (see PaymentService.sendConfirmationOnce).
+   */
+  static async sendReservationConfirmation(bookings: IBooking[]): Promise<void> {
+    if (!bookings.length) return;
+    const first = bookings[0];
+    const code = first.reservationCode ?? first.bookingCode;
+    const total = bookings.reduce((sum, b) => sum + b.totalAmount, 0);
+    const lines = bookings.map((b, i) => {
+      const type = (b.roomTypeId as unknown as { name?: string })?.name ?? 'Room';
+      return `  Room ${i + 1}: ${type}, ${b.adults} adult(s)` +
+        (b.children ? `, ${b.children} child(ren)` : '') +
+        ` — ${this.formatMoney(b.totalAmount)} (ref ${b.bookingCode})`;
+    });
+
+    await this.send({
+      to: first.guest.email,
+      channel: 'EMAIL',
+      subject: `Booking confirmed — ${code}`,
+      body:
+        `Dear ${first.guest.fullName},\n\n` +
+        `Your payment was received and your booking is confirmed.\n` +
+        `Reservation: ${code}\n` +
+        `Check-in: ${first.checkInDate.toDateString()} from 14:00\n` +
+        `Check-out: ${first.checkOutDate.toDateString()} by 12:00\n\n` +
+        `${lines.join('\n')}\n\n` +
+        `Total paid: ${this.formatMoney(total)}\n`,
+    });
+  }
+
   /** UC-G14 step 9. */
   static async sendCancellationNotice(
     booking: IBooking,

@@ -9,6 +9,7 @@ import 'dotenv/config';
 import { createApp } from './app';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { seedIfEmpty } from './config/seed';
+import { migrate } from './config/migrate';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -31,6 +32,7 @@ function checkConfig(): void {
 async function start(): Promise<void> {
   checkConfig();
   await connectDatabase();
+  await migrate();
 
   if (process.env.NODE_ENV !== 'production') {
     await seedIfEmpty();

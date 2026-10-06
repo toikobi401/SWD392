@@ -22,6 +22,9 @@ import type {
   LeaveType,
   PaymentMethod,
   Profile,
+  Promotion,
+  PromotionForm,
+  PublicOffer,
   ReconcileResult,
   RefundRequest,
   RoleDoc,
@@ -30,6 +33,7 @@ import type {
   RoomType,
   SearchCriteria,
   SearchResponse,
+  VoucherPreview,
 } from '../types';
 
 export const authApi = {
@@ -85,8 +89,9 @@ export const bookingApi = {
   async create(payload: CreateBookingRequest): Promise<BookingConfirmation> {
     return (await api.post<BookingConfirmation>('/bookings', payload)).data;
   },
-  async lookup(code: string, email: string): Promise<Booking> {
-    return (await api.get<Booking>('/bookings/lookup', { params: { code, email } })).data;
+  /** A reservation code, or any of its rooms' codes, finds every room. */
+  async lookup(code: string, email: string): Promise<{ reservationCode: string; bookings: Booking[] }> {
+    return (await api.get('/bookings/lookup', { params: { code, email } })).data;
   },
   async mine(): Promise<Booking[]> {
     return (await api.get<{ bookings: Booking[] }>('/me/bookings')).data.bookings;
@@ -171,6 +176,33 @@ export const refundApi = {
   },
   async decide(id: string, approve: boolean, options: { approvedAmount?: number; note?: string } = {}) {
     return (await api.patch(`/refund-requests/${id}/decision`, { approve, ...options })).data;
+  },
+};
+
+export const promotionApi = {
+  /** UC-G06 — public codes a guest can use today. */
+  async offers(): Promise<PublicOffer[]> {
+    return (await api.get<{ offers: PublicOffer[] }>('/promotions/public')).data.offers;
+  },
+  /** UC-G11 — what a code takes off a subtotal (before tax). A preview; the booking re-checks. */
+  async preview(code: string, subtotal: number): Promise<VoucherPreview> {
+    return (await api.get<VoucherPreview>('/promotions/validate', { params: { code, subtotal } })).data;
+  },
+  /** UC-M11 with UC-M19 usage. */
+  async list(): Promise<Promotion[]> {
+    return (await api.get<{ promotions: Promotion[] }>('/promotions')).data.promotions;
+  },
+  async create(form: PromotionForm): Promise<Promotion> {
+    return (await api.post<Promotion>('/promotions', form)).data;
+  },
+  async update(id: string, changes: Partial<PromotionForm>): Promise<Promotion> {
+    return (await api.patch<Promotion>(`/promotions/${id}`, changes)).data;
+  },
+  async setActive(id: string, isActive: boolean): Promise<Promotion> {
+    return (await api.patch<Promotion>(`/promotions/${id}/status`, { isActive })).data;
+  },
+  async remove(id: string): Promise<void> {
+    await api.delete(`/promotions/${id}`);
   },
 };
 

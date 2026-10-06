@@ -43,6 +43,7 @@ import {
   AccountStatus,
   BookingStatus,
   ChargeType,
+  DiscountType,
   FolioStatus,
   LeaveStatus,
   LeaveType,
@@ -54,7 +55,7 @@ import {
 } from '../models/enums';
 import { PricingRule, TAX_RATE } from '../rules/pricing.rule';
 import { InvoiceNumberGenerator } from '../rules/invoice-number.generator';
-import { hotelToday, addDays } from '../utils/hotel-time';
+import { hotelToday, addDays, hotelDayStart, hotelDayEnd } from '../utils/hotel-time';
 import { DEV_PASSWORD, seedAll } from './seed';
 
 // ---------------------------------------------------------------------------
@@ -214,7 +215,6 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
   const typeById = new Map(roomTypes.map((t) => [String(t._id), t]));
   const rooms = await Room.find().sort({ roomNumber: 1 });
   const breakfast = await Service.findOne({ name: 'Breakfast buffet' });
-  const promotion = await Promotion.findOne({ code: 'WELCOME10' });
 
   // Re-seed here: creating accounts above draws random numbers only the first
   // time (they already exist on a --reset run), which would shift everything
@@ -284,13 +284,14 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
   type Row = Record<string, any> & { _stay?: Stay };
   const bookingRows: Row[] = [];
 
-  function price(roomType: IRoomType, checkIn: Date, checkOut: Date, adults: number, withPromo: boolean) {
+  // Priced without a voucher; codes are applied per reservation further down.
+  function price(roomType: IRoomType, checkIn: Date, checkOut: Date, adults: number) {
     const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / 86_400_000);
     const addOns =
       breakfast && chance(0.3)
         ? [{ serviceId: String(breakfast._id), quantity: nights * adults, unitPrice: breakfast.price }]
         : [];
-    const p = PricingRule.calculate(roomType, checkIn, checkOut, 1, addOns, withPromo ? promotion : null);
+    const p = PricingRule.calculate(roomType, checkIn, checkOut, 1, addOns, null);
     return { p, addOns };
   }
 
@@ -300,8 +301,7 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
     const customer = chance(0.04) ? pick(customers) : undefined;
     const adults = Math.max(1, Math.min(stay.roomType.capacity, int(1, stay.roomType.capacity)));
     const children = stay.roomType.capacity >= 4 ? int(0, 2) : 0;
-    const withPromo = Boolean(promotion) && chance(0.1);
-    const { p, addOns } = price(stay.roomType, stay.checkIn, stay.checkOut, adults, withPromo);
+    const { p, addOns } = price(stay.roomType, stay.checkIn, stay.checkOut, adults);
 
     bookingRows.push({
       _id: new Types.ObjectId(),
@@ -316,7 +316,6 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
       children,
       status: stay.status,
       addOnServices: addOns.map((a) => ({ serviceId: a.serviceId, quantity: a.quantity, price: a.unitPrice })),
-      promotionId: withPromo ? promotion?._id : undefined,
       subtotal: p.subtotal,
       discount: p.discount,
       tax: p.tax,
@@ -330,9 +329,45 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
     });
   }
 
+  // Multi-room reservations (UC-G07): families and groups book rooms
+  // together, so some stays with identical dates — and the same state today —
+  // become one reservation of 2–3 rooms. Grouping does not move any stay, so
+  // every per-room invariant above still holds.
+  const sameDates = new Map<string, Row[]>();
+  for (const r of bookingRows) {
+    const key = `${r.checkInDate.getTime()}|${r.checkOutDate.getTime()}|${r.status}`;
+    sameDates.set(key, [...(sameDates.get(key) ?? []), r]);
+  }
+  const groups: Row[][] = [];
+  for (const rows of sameDates.values()) {
+    let i = 0;
+    while (rows.length - i >= 2) {
+      if (chance(0.3)) {
+        const size = Math.min(rows.length - i, int(2, 3));
+        groups.push(rows.slice(i, i + size));
+        i += size;
+      } else i++;
+    }
+  }
+  for (const group of groups) {
+    const lead = group[0];
+    const code = lead.bookingCode;
+    group.forEach((r, n) => {
+      r.reservationCode = code;
+      r.bookingCode = `${code}-${n + 1}`;
+      // One booker, one moment of booking, for every room of the reservation.
+      r.guest = lead.guest;
+      r.customerId = lead.customerId;
+      r.createdAt = lead.createdAt;
+      r.updatedAt = lead.createdAt;
+    });
+  }
+  for (const r of bookingRows) r.reservationCode ??= r.bookingCode;
+  const isSingle = (r: Row) => r.reservationCode === r.bookingCode;
+
   // The demo customer gets one of everything, so their screens are not empty.
   const forDemo = (predicate: (r: Row) => boolean) => {
-    const row = bookingRows.find((r) => predicate(r) && r.customerId === undefined);
+    const row = bookingRows.find((r) => predicate(r) && isSingle(r) && r.customerId === undefined);
     if (row) {
       row.customerId = demoCustomer._id;
       row.guest = guestFor(demoCustomer);
@@ -341,6 +376,51 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
   forDemo((r) => r.status === BookingStatus.CHECKED_OUT);
   forDemo((r) => r.status === BookingStatus.CHECKED_IN);
   forDemo((r) => r.status === BookingStatus.CONFIRMED && r.checkInDate >= addDays(today, 5));
+  // …including an upcoming family trip booked as several rooms.
+  const demoGroup = groups.find(
+    (g) => g[0].status === BookingStatus.CONFIRMED && g[0].checkInDate >= addDays(today, 3) && !g[0].customerId,
+  );
+  demoGroup?.forEach((r) => {
+    r.customerId = demoCustomer._id;
+    r.guest = guestFor(demoCustomer);
+  });
+
+  // Promotion codes (UC-M11). About one reservation in seven used a code that
+  // was valid on the day it was booked and whose minimum spend it met — as
+  // BookingCoordinator would have allowed — with the discount spread over the
+  // rooms by price. `usedCount` is then exactly the reservations that used it.
+  const promotions = await ensureDemoPromotions(today);
+  const uses = new Map<string, number>();
+  const byReservation = new Map<string, Row[]>();
+  for (const r of bookingRows) byReservation.set(r.reservationCode, [...(byReservation.get(r.reservationCode) ?? []), r]);
+  for (const rows of byReservation.values()) {
+    if (!chance(0.15)) continue;
+    const bookedAt: Date = rows[0].createdAt;
+    const gross = rows.reduce((n, r) => n + r.subtotal, 0);
+    const usable = promotions.filter(
+      (p) =>
+        bookedAt >= p.validFrom &&
+        bookedAt <= p.validTo &&
+        gross >= p.minimumSpend &&
+        (p.usageLimit === 0 || (uses.get(String(p._id)) ?? 0) < p.usageLimit),
+    );
+    if (!usable.length) continue;
+    const promo = pick(usable);
+    const total = PricingRule.discountFor(promo, gross);
+    let left = total;
+    rows.forEach((r, i) => {
+      const discount = i === rows.length - 1 ? left : Math.floor((total * r.subtotal) / gross);
+      left -= discount;
+      r.promotionId = promo._id;
+      r.discount = discount;
+      r.tax = Math.round((r.subtotal - discount) * TAX_RATE);
+      r.totalAmount = r.subtotal - discount + r.tax;
+    });
+    uses.set(String(promo._id), (uses.get(String(promo._id)) ?? 0) + 1);
+  }
+  for (const p of promotions) {
+    await Promotion.updateOne({ _id: p._id }, { $set: { usedCount: uses.get(String(p._id)) ?? 0 } });
+  }
 
   // Cancellations and no-shows do not occupy rooms, so they sit outside the
   // timelines. The demo customer's first cancellation awaits a refund decision.
@@ -352,7 +432,7 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
     const checkOut = addDays(checkIn, int(1, 3));
     const created = past(addDays(checkIn, -int(5, 20)));
     const customer = i === 0 ? demoCustomer : chance(0.4) ? pick(customers) : undefined;
-    const { p } = price(roomType, checkIn, checkOut, 1, false);
+    const { p } = price(roomType, checkIn, checkOut, 1);
     extraRows.push({
       _id: new Types.ObjectId(),
       bookingCode: bookingCode(created),
@@ -379,23 +459,35 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
     });
   }
 
+  for (const r of extraRows) r.reservationCode = r.bookingCode;
   const allRows = [...bookingRows, ...extraRows];
   await Booking.insertMany(allRows.map(({ _stay, ...doc }) => doc));
 
   // ---- 3. Payments (every confirmed stay was prepaid through payOS) ----------
+  // One payOS link — one order code, one bank transfer — per reservation;
+  // one Payment row per room, as PaymentService.chargeReservation writes them.
   let orderSeq = 1_000_000_000; // far below real, time-based payOS order codes
-  const paymentRows: Row[] = allRows.map((b, i) => ({
-    bookingId: b._id,
-    amount: b.totalAmount,
-    method: PaymentMethod.BANK_TRANSFER,
-    status: PaymentStatus.PAID,
-    idempotencyKey: `demo-pay-${i}`,
-    gatewayOrderCode: orderSeq++,
-    gatewayRef: `FT${String(orderSeq).slice(-8)}`,
-    paidAt: past(new Date(b.createdAt.getTime() + int(2, 40) * 60_000)),
-    createdAt: b.createdAt,
-    updatedAt: b.createdAt,
-  }));
+  const orderOf = new Map<string, { code: number; paidAt: Date }>();
+  const paymentRows: Row[] = allRows.map((b, i) => {
+    let order = orderOf.get(b.reservationCode);
+    if (!order) {
+      order = { code: orderSeq++, paidAt: past(new Date(b.createdAt.getTime() + int(2, 40) * 60_000)) };
+      orderOf.set(b.reservationCode, order);
+    }
+    return {
+      bookingId: b._id,
+      amount: b.totalAmount,
+      method: PaymentMethod.BANK_TRANSFER,
+      status: PaymentStatus.PAID,
+      idempotencyKey: `demo-pay-${i}`,
+      gatewayOrderCode: order.code,
+      gatewayRef: `FT${String(order.code).slice(-8)}`,
+      paidAt: order.paidAt,
+      notifiedAt: order.paidAt,
+      createdAt: b.createdAt,
+      updatedAt: b.createdAt,
+    };
+  });
   const payments = await Payment.insertMany(paymentRows);
   const paymentByBooking = new Map(payments.map((p) => [String(p.bookingId), p]));
 
@@ -621,6 +713,41 @@ export async function seedDemoData(options: { reset?: boolean } = {}): Promise<v
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The Manager's promotion codes, one of each status the Promotions screen
+ * shows: active public and private codes, a scheduled one, an expired one,
+ * one used up and one switched off. Windows are relative to today so the
+ * statuses hold whenever the demo is generated.
+ */
+async function ensureDemoPromotions(today: Date) {
+  const day = (n: number) => addDays(today, n).toISOString().slice(0, 10);
+  const manager = await User.findOne({ email: 'manager@hms.local' });
+  const defs = [
+    { code: 'WELCOME10', description: '10 % off your stay', discountType: DiscountType.PERCENTAGE, discountValue: 10, from: -150, to: 365, usageLimit: 0, minimumSpend: 0, isPublic: true, isActive: true },
+    { code: 'LONGSTAY', description: 'Long-stay saving', discountType: DiscountType.FIXED_AMOUNT, discountValue: 300_000, from: -60, to: 90, usageLimit: 0, minimumSpend: 3_000_000, isPublic: true, isActive: true },
+    { code: 'CORP8', description: 'Corporate rate for partner companies', discountType: DiscountType.PERCENTAGE, discountValue: 8, from: -120, to: 240, usageLimit: 0, minimumSpend: 0, isPublic: false, isActive: true },
+    { code: 'FLASH50', description: 'Flash sale: 50 % off, first 5 bookings', discountType: DiscountType.PERCENTAGE, discountValue: 50, from: -45, to: 15, usageLimit: 5, minimumSpend: 0, isPublic: true, isActive: true },
+    { code: 'SUMMER15', description: 'Summer 15 % off', discountType: DiscountType.PERCENTAGE, discountValue: 15, from: -150, to: -10, usageLimit: 0, minimumSpend: 1_500_000, isPublic: true, isActive: true },
+    { code: 'PARTNER12', description: 'Former travel-agent partnership', discountType: DiscountType.PERCENTAGE, discountValue: 12, from: -150, to: 120, usageLimit: 0, minimumSpend: 0, isPublic: false, isActive: false },
+    { code: 'TET2027', description: 'Tết holiday: 20 % off', discountType: DiscountType.PERCENTAGE, discountValue: 20, from: 100, to: 135, usageLimit: 200, minimumSpend: 2_000_000, isPublic: true, isActive: true },
+  ];
+  const promotions = [];
+  for (const d of defs) {
+    const { from, to, ...fields } = d;
+    promotions.push(
+      (await Promotion.findOneAndUpdate(
+        { code: d.code },
+        {
+          $set: { ...fields, validFrom: hotelDayStart(day(from)), validTo: hotelDayEnd(day(to)), createdBy: manager?._id },
+          $setOnInsert: { usedCount: 0 },
+        },
+        { upsert: true, new: true },
+      ))!,
+    );
+  }
+  return promotions;
+}
+
 async function ensureStaff(): Promise<IEmployee[]> {
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 12);
   const roleIds = new Map((await Role.find()).map((r) => [r.name, r._id]));
@@ -783,6 +910,11 @@ async function summarize(today: Date): Promise<void> {
   console.log(`[demo] bookings  ${fmt(byStatus)}`);
   console.log(`[demo] today     ${arrivals} arrival(s) to check in, ${departures} departure(s) due`);
   console.log(`[demo] folios ${await Folio.countDocuments()}, charges ${await Charge.countDocuments()}, invoices ${await Invoice.countDocuments()}, payments ${await Payment.countDocuments()}`);
+  const multi = await Booking.aggregate([
+    { $group: { _id: '$reservationCode', rooms: { $sum: 1 } } },
+    { $match: { rooms: { $gt: 1 } } },
+  ]);
+  console.log(`[demo] reservations with several rooms: ${multi.length} (${multi.reduce((a, m) => a + m.rooms, 0)} rooms)`);
   console.log(`[demo] staff ${await Employee.countDocuments()}, customers ${await Customer.countDocuments()}, shifts ${await Shift.countDocuments()}, leave ${await LeaveRequest.countDocuments()}, tasks ${await Task.countDocuments()}`);
 }
 
@@ -838,6 +970,38 @@ export async function verifyDemoInvariants(today: Date): Promise<void> {
     seqs.forEach((s, i) => { if (s !== i + 1) problems.push(`invoice gap in ${year} at ${i + 1}`); });
   }
 
+  // A reservation's rooms share their dates and their one payOS order code.
+  const reservations = await Booking.aggregate([
+    {
+      $group: {
+        _id: '$reservationCode',
+        ins: { $addToSet: '$checkInDate' },
+        outs: { $addToSet: '$checkOutDate' },
+        ids: { $push: '$_id' },
+      },
+    },
+  ]);
+  for (const r of reservations) {
+    if (r.ins.length > 1 || r.outs.length > 1) problems.push(`reservation ${r._id} has rooms on different dates`);
+    if (r.ids.length > 1) {
+      const codes = await Payment.distinct('gatewayOrderCode', { bookingId: { $in: r.ids }, reversalOfId: { $exists: false }, gatewayOrderCode: { $exists: true } });
+      if (codes.length !== 1) problems.push(`reservation ${r._id} is paid through ${codes.length} payOS links`);
+    }
+  }
+
+  // A promotion's use count is the reservations that used it (BR-51: one use per
+  // reservation), never above its limit, and a reservation's rooms agree on it.
+  for (const p of await Promotion.find()) {
+    const used = (await Booking.distinct('reservationCode', { promotionId: p._id })).length;
+    if (used !== p.usedCount) problems.push(`promotion ${p.code}: usedCount ${p.usedCount} ≠ ${used} reservations`);
+    if (p.usageLimit > 0 && p.usedCount > p.usageLimit) problems.push(`promotion ${p.code}: ${p.usedCount} uses over its limit ${p.usageLimit}`);
+  }
+  const mixed = await Booking.aggregate([
+    { $group: { _id: '$reservationCode', promos: { $addToSet: { $ifNull: ['$promotionId', null] } } } },
+    { $match: { 'promos.1': { $exists: true } } },
+  ]);
+  for (const m of mixed) problems.push(`reservation ${m._id} mixes promotion codes`);
+
   // Every checked-out stay has a closed folio and an invoice; in-house an open one.
   const checkedOut = await Booking.countDocuments({ status: BookingStatus.CHECKED_OUT });
   if ((await Invoice.countDocuments()) !== checkedOut) problems.push('invoice count ≠ checked-out stays');
@@ -848,5 +1012,5 @@ export async function verifyDemoInvariants(today: Date): Promise<void> {
     for (const p of problems.slice(0, 20)) console.error('  - ' + p);
     throw new Error('Demo data failed its invariant checks');
   }
-  console.log('[demo] invariants OK — BR-25 one guest per room, no oversold night, folio arithmetic, gapless invoices');
+  console.log('[demo] invariants OK — BR-25 one guest per room, no oversold night, folio arithmetic, gapless invoices, one payment link per reservation, promotion use counts');
 }

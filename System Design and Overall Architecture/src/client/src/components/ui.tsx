@@ -9,11 +9,12 @@ import {
   BOOKING_STATUS,
   LEAVE_STATUS,
   PAYMENT_STATUS,
+  PROMOTION_STATUS,
   REFUND_STATUS,
   ROOM_STATUS,
 } from '../lib/format';
 
-type Kind = 'booking' | 'room' | 'leave' | 'refund' | 'payment' | 'account';
+type Kind = 'booking' | 'room' | 'leave' | 'refund' | 'payment' | 'account' | 'promotion';
 
 const LABELS: Record<Kind, Record<string, string>> = {
   booking: BOOKING_STATUS,
@@ -22,6 +23,7 @@ const LABELS: Record<Kind, Record<string, string>> = {
   refund: REFUND_STATUS,
   payment: PAYMENT_STATUS,
   account: ACCOUNT_STATUS,
+  promotion: PROMOTION_STATUS,
 };
 
 const ROOM_CLASS: Record<string, string> = {

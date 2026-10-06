@@ -39,6 +39,7 @@ function signObject(data) {
 
 // --- Fake payOS --------------------------------------------------------------
 const links = new Map(); // orderCode -> link
+const sentMail = []; // notification provider inbox
 let rejectNextLink = false;
 const seen = { badSignature: 0, badAuth: 0, created: 0 };
 
@@ -50,7 +51,7 @@ const fake = http.createServer((rq, rs) => {
     const send = (o) => rs.end(JSON.stringify(o));
     const body = raw ? JSON.parse(raw) : {};
 
-    if (rq.url === '/send') return send({}); // notification provider
+    if (rq.url === '/send') { sentMail.push(body); return send({}); } // notification provider
 
     if (rq.headers['x-client-id'] !== PAYOS.clientId || rq.headers['x-api-key'] !== PAYOS.apiKey) {
       seen.badAuth++;
@@ -67,7 +68,7 @@ const fake = http.createServer((rq, rs) => {
       if (description.length > 9) return send({ code: '20', desc: 'description too long' });
       if (rejectNextLink) { rejectNextLink = false; return send({ code: '20', desc: 'Thông tin truyền lên không đúng' }); }
       seen.created++;
-      const link = { orderCode, amount, description, status: 'PENDING', amountPaid: 0, transactions: [], paymentLinkId: 'pl' + orderCode, returnUrl, cancelUrl };
+      const link = { orderCode, amount, description, items: body.items, status: 'PENDING', amountPaid: 0, transactions: [], paymentLinkId: 'pl' + orderCode, returnUrl, cancelUrl };
       links.set(orderCode, link);
       return send({ code: '00', desc: 'success', data: {
         orderCode, amount, description, currency: 'VND', status: 'PENDING', paymentLinkId: link.paymentLinkId,
@@ -141,6 +142,7 @@ process.env.FRONTEND_URL = FRONTEND;
   await seedRoles();
   const recRole = await Role.findOne({ name: 'RECEPTIONIST' });
   const adminRole = await Role.findOne({ name: 'ADMIN' });
+  const mgrRole = await Role.findOne({ name: 'MANAGER' });
   const rt = await RoomType.create({
     name: 'Deluxe Double', description: 'Sea view', capacity: 2,
     basePrice: 1200000, amenities: ['WiFi'], images: [], totalRooms: 3,
@@ -148,7 +150,7 @@ process.env.FRONTEND_URL = FRONTEND;
   await Room.create({ roomNumber: '301', roomTypeId: rt._id, floor: 3 });
   await Room.create({ roomNumber: '302', roomTypeId: rt._id, floor: 3 });
 
-  const staff = [['1', 'rec1@hms.vn', recRole], ['2', 'rec2@hms.vn', recRole], ['9', 'admin@hms.vn', adminRole]];
+  const staff = [['1', 'rec1@hms.vn', recRole], ['2', 'rec2@hms.vn', recRole], ['9', 'admin@hms.vn', adminRole], ['3', 'mgr@hms.vn', mgrRole]];
   for (const [i, email, role] of staff) {
     await Employee.create({
       fullName: 'Staff ' + i, email, status: 'ACTIVE',
@@ -386,6 +388,134 @@ process.env.FRONTEND_URL = FRONTEND;
   check('BR-37 no second refund of money already being refunded', r.status === 409 && r.body.error.code === 'ALREADY_REFUNDED', JSON.stringify(r.body));
 
   // ==========================================================================
+  console.log('--- multi-room reservation (UC-G07, BR-08) ---');
+  const { Promotion } = req('dist/models/booking.model.js');
+  const suite = await RoomType.create({
+    name: 'Family Suite', description: 'Two bedrooms', capacity: 4,
+    basePrice: 2500000, amenities: ['WiFi'], images: [], totalRooms: 2,
+  });
+  const inM = day(25), outM = day(27);
+  const createdBefore = seen.created;
+  const mailBefore = sentMail.length;
+  const partyBody = (rooms, over) => Object.assign({
+    checkInDate: inM, checkOutDate: outM, paymentMethod: 'BANK_TRANSFER',
+    guest: { fullName: 'Le Dat', email: 'dat@x.com', phone: '0900' }, rooms,
+  }, over || {});
+
+  r = await post('/api/bookings', partyBody([
+    { roomTypeId: String(rt._id), adults: 2 },
+    { roomTypeId: String(rt._id), adults: 1 },
+    { roomTypeId: String(suite._id), adults: 2, children: 2 },
+  ]), token);
+  const resCode = r.body.reservationCode;
+  // Deluxe: 2 × 1,200,000 + 10 % = 2,640,000 each; suite: 2 × 2,500,000 + 10 % = 5,500,000.
+  check('Three rooms of two types book as one reservation (202)',
+    r.status === 202 && r.body.rooms.length === 3 && r.body.total === 2640000 * 2 + 5500000,
+    JSON.stringify(r.body).slice(0, 220));
+  check('Rooms are numbered under the reservation code',
+    r.body.rooms.map((x) => x.bookingCode).join() === [1, 2, 3].map((n) => resCode + '-' + n).join(), JSON.stringify(r.body.rooms));
+
+  const party = await Booking.find({ reservationCode: resCode }).sort({ bookingCode: 1 });
+  const partyPays = await Payment.find({ bookingId: { $in: party.map((b) => b._id) } });
+  const partyOrder = partyPays[0] && partyPays[0].gatewayOrderCode;
+  check('ONE payOS link for the whole reservation, for the total',
+    seen.created === createdBefore + 1 && links.get(partyOrder).amount === r.body.total && links.get(partyOrder).items.length === 3,
+    JSON.stringify({ created: seen.created - createdBefore, link: links.get(partyOrder) && links.get(partyOrder).amount }));
+  check('One Payment per room, all sharing the order code',
+    partyPays.length === 3 && partyPays.every((p) => p.gatewayOrderCode === partyOrder && p.status === 'PENDING') &&
+    party.every((b) => partyPays.find((p) => String(p.bookingId) === String(b._id)).amount === b.totalAmount), '');
+  check('Every room is held while the guest pays',
+    (await available(inM, outM)) === 1 && party.every((b) => b.status === 'PENDING'), 'deluxe available=' + (await available(inM, outM)));
+
+  r = await post('/api/payments/payos/webhook', payAtBank(partyOrder, { amount: 2640000 }));
+  check('A transfer for one room only confirms NO room (amount must match the total)',
+    (await Booking.countDocuments({ reservationCode: resCode, status: 'PENDING' })) === 3, '');
+
+  const whParty = payAtBank(partyOrder);
+  r = await post('/api/payments/payos/webhook', whParty);
+  const confirmed = await Booking.find({ reservationCode: resCode });
+  check('The genuine webhook confirms all three rooms at once',
+    r.status === 200 && confirmed.every((b) => b.status === 'CONFIRMED'), JSON.stringify(confirmed.map((b) => b.status)));
+  const partyCaptures = await Promise.all(partyPays.map((p) => captures(p._id)));
+  check('Each room payment captured exactly once', partyCaptures.every((n) => n === 1), JSON.stringify(partyCaptures));
+  check('Holds released; confirmed rooms keep the inventory',
+    (await InventoryHold.countDocuments({ bookingId: { $in: party.map((b) => b._id) } })) === 0 && (await available(inM, outM)) === 1, '');
+
+  // Same-tick race on a multi-room payment: callers may each settle some of
+  // the rooms, yet the reservation must be confirmed and emailed ONCE.
+  const { PaymentService: PS } = req('dist/services/payment.service.js');
+  r = await post('/api/bookings', partyBody([
+    { roomTypeId: String(rt._id), adults: 1 },
+    { roomTypeId: String(suite._id), adults: 2 },
+  ], { checkInDate: day(34), checkOutDate: day(35) }));
+  const raceRes = r.body.reservationCode;
+  const racePays = await Payment.find({ bookingId: { $in: (await Booking.find({ reservationCode: raceRes })).map((b) => b._id) } });
+  const raceTotal = racePays.reduce((a, p) => a + p.amount, 0);
+  payAtBank(racePays[0].gatewayOrderCode);
+  const raceMailBefore = sentMail.length;
+  await Promise.all(Array.from({ length: 10 }, () =>
+    PS.confirmFromGateway({ orderCode: racePays[0].gatewayOrderCode, approved: true, reference: 'FTRACE2', amount: raceTotal })));
+  await new Promise((res) => setTimeout(res, 200));
+  const raceMail = sentMail.slice(raceMailBefore).filter((m) => (m.subject || '').includes(raceRes));
+  const raceCaps = await Promise.all(racePays.map((p) => captures(p._id)));
+  check('10 same-tick confirmations of a 2-room payment: each room once, ONE email',
+    raceCaps.every((n) => n === 1) && raceMail.length === 1, JSON.stringify({ raceCaps, emails: raceMail.length }));
+
+  await post('/api/payments/payos/webhook', whParty); // payOS retries
+  const partyMail = sentMail.slice(mailBefore).filter((m) => (m.subject || '').includes(resCode));
+  check('UC-G12 one confirmation email for the reservation, listing every room',
+    partyMail.length === 1 && [1, 2, 3].every((n) => partyMail[0].body.includes(resCode + '-' + n)),
+    JSON.stringify(partyMail.map((m) => m.subject)));
+
+  r = await get('/api/bookings/lookup?code=' + resCode + '-2&email=dat@x.com');
+  check('UC-G13 a room code finds the whole reservation', r.status === 200 && r.body.bookings.length === 3, 'status=' + r.status);
+  r = await get('/api/bookings/' + party[0]._id, token);
+  check('Booking detail lists its sibling rooms', r.status === 200 && r.body.reservation.rooms.length === 3, JSON.stringify(r.body.reservation));
+
+  r = await post('/api/bookings/' + party[1]._id + '/cancel', { reason: 'One person cannot come' }, token);
+  const afterCancel = await Booking.find({ reservationCode: resCode }).sort({ bookingCode: 1 });
+  check('Cancelling one room leaves the others booked',
+    r.status === 200 && afterCancel.map((b) => b.status).join() === 'CONFIRMED,CANCELLED,CONFIRMED' && r.body.refundable === 2640000,
+    JSON.stringify({ statuses: afterCancel.map((b) => b.status), refundable: r.body.refundable }));
+  check('...and returns just that room to inventory', (await available(inM, outM)) === 2, 'available=' + (await available(inM, outM)));
+
+  const bookingsBefore = await Booking.countDocuments();
+  const holdsBefore = await InventoryHold.countDocuments();
+  const linksBefore = seen.created;
+  r = await post('/api/bookings', partyBody([
+    { roomTypeId: String(rt._id), adults: 1 },
+    { roomTypeId: String(suite._id), adults: 2 },
+    { roomTypeId: String(suite._id), adults: 2 },
+  ]));
+  check('All or nothing: one room short → 409, nothing held, booked or charged',
+    r.status === 409 && r.body.error.code === 'NO_AVAILABILITY' &&
+    (await Booking.countDocuments()) === bookingsBefore && (await InventoryHold.countDocuments()) === holdsBefore && seen.created === linksBefore,
+    JSON.stringify(r.body));
+
+  r = await post('/api/bookings', partyBody([{ roomTypeId: String(suite._id), adults: 5 }]));
+  check('BR-13 capacity is checked per room', r.status === 400 && r.body.error.code === 'CAPACITY_EXCEEDED', JSON.stringify(r.body));
+  r = await post('/api/bookings', partyBody(Array.from({ length: 6 }, () => ({ roomTypeId: String(rt._id), adults: 1 }))));
+  check('BR-08 at most 5 rooms per reservation', r.status === 400 && r.body.error.code === 'TOO_MANY_ROOMS', JSON.stringify(r.body));
+
+  await Promotion.create({ code: 'GROUP10', discountType: 'PERCENTAGE', discountValue: 10, validFrom: new Date(Date.now() - 86400000), validTo: day(60), usageLimit: 1 });
+  r = await post('/api/bookings', partyBody([
+    { roomTypeId: String(rt._id), adults: 2 },
+    { roomTypeId: String(suite._id), adults: 3 },
+  ], { checkInDate: day(30), checkOutDate: day(31), voucherCode: 'GROUP10' }), token);
+  const vParty = await Booking.find({ reservationCode: r.body.reservationCode });
+  const vGross = vParty.reduce((a, b) => a + b.subtotal, 0);
+  const vDiscount = vParty.reduce((a, b) => a + b.discount, 0);
+  check('Voucher: 10 % of the reservation, spread over its rooms',
+    r.status === 202 && vDiscount === Math.round(vGross * 0.1) && vParty.every((b) => b.discount > 0),
+    JSON.stringify(vParty.map((b) => ({ sub: b.subtotal, disc: b.discount }))));
+  check('Voucher is not used up by an unpaid checkout', (await Promotion.findOne({ code: 'GROUP10' })).usedCount === 0, '');
+  const vPay = await Payment.findOne({ bookingId: vParty[0]._id });
+  await post('/api/payments/payos/webhook', payAtBank(vPay.gatewayOrderCode));
+  check('Paid: the voucher counts ONE use for the whole reservation', (await Promotion.findOne({ code: 'GROUP10' })).usedCount === 1, '');
+  r = await post('/api/bookings', partyBody([{ roomTypeId: String(rt._id), adults: 1 }], { checkInDate: day(32), checkOutDate: day(33), voucherCode: 'GROUP10' }));
+  check('A used-up voucher is refused', r.status === 400 && r.body.error.code === 'INVALID_VOUCHER', JSON.stringify(r.body));
+
+  // ==========================================================================
   console.log('--- UC-A12 register webhook ---');
   const admin = (await post('/api/auth/login', { email: 'admin@hms.vn', password: 'Passw0rdX' })).body.accessToken;
   r = await post('/api/payments/payos/confirm-webhook', { webhookUrl: 'https://hms.example/api/payments/payos/webhook' }, token);
@@ -394,6 +524,143 @@ process.env.FRONTEND_URL = FRONTEND;
   check('Non-HTTPS webhook URL refused', r.status === 400 && r.body.error.code === 'INVALID_URL', JSON.stringify(r.body));
   r = await post('/api/payments/payos/confirm-webhook', { webhookUrl: 'https://hms.example/api/payments/payos/webhook' }, admin);
   check('Admin registers the webhook with payOS', r.status === 200, JSON.stringify(r.body));
+
+  // ==========================================================================
+  console.log('--- UC-M11 promotion codes ---');
+  {
+    const mgr = (await post('/api/auth/login', { email: 'mgr@hms.vn', password: 'Passw0rdX' })).body.accessToken;
+    const recep = (await post('/api/auth/login', { email: 'rec1@hms.vn', password: 'Passw0rdX' })).body.accessToken;
+    const patch = (p, b, t) => call('PATCH', p, b, t);
+    const del = (p, t) => call('DELETE', p, undefined, t);
+    const terms = (over) => Object.assign({
+      code: 'spring20', description: 'Spring 20 % off', discountType: 'PERCENTAGE', discountValue: 20,
+      validFrom: day(0), validTo: day(40), usageLimit: 0, minimumSpend: 0, isPublic: true,
+    }, over || {});
+
+    r = await get('/api/promotions', token);
+    const customer403 = r.status;
+    r = await get('/api/promotions', recep);
+    const recep403 = r.status;
+    r = await get('/api/promotions', admin);
+    check('RBAC: only MANAGE_PRICING manages codes (customer, receptionist, admin → 403)',
+      customer403 === 403 && recep403 === 403 && r.status === 403, [customer403, recep403, r.status].join());
+
+    r = await post('/api/promotions', terms({ usedCount: 99, isActive: false }), mgr);
+    const spring = r.body;
+    check('UC-M20 creates a code, upper-cased, ACTIVE', r.status === 201 && spring.code === 'SPRING20' && spring.status === 'ACTIVE', JSON.stringify(r.body));
+    check('...ignoring usedCount / isActive smuggled into the form', spring.usedCount === 0 && spring.isActive === true, JSON.stringify(spring));
+    r = await post('/api/promotions', terms({ code: 'Spring20' }), mgr);
+    check('BR-52 a code is unique, whatever its case (409)', r.status === 409 && r.body.error.code === 'PROMOTION_CODE_TAKEN', JSON.stringify(r.body));
+
+    const bad = await Promise.all([
+      post('/api/promotions', terms({ code: 'PCT150', discountValue: 150 }), mgr),
+      post('/api/promotions', terms({ code: 'BACKWARD', validFrom: day(10), validTo: day(5) }), mgr),
+      post('/api/promotions', terms({ code: 'HAS SPACE' }), mgr),
+      post('/api/promotions', terms({ code: 'OVERDONE', validFrom: day(-10), validTo: day(-2) }), mgr),
+      post('/api/promotions', terms({ code: 'NEGFIXED', discountType: 'FIXED_AMOUNT', discountValue: -5 }), mgr),
+    ]);
+    check('BR-53/54/52 refuses >100 %, end before start, spaces, an end in the past, a negative amount',
+      bad.every((x) => x.status === 400 && x.body.error.code === 'VALIDATION_ERROR'), JSON.stringify(bad.map((x) => x.body.error)));
+
+    r = await post('/api/promotions', terms({ code: 'CORPONLY', isPublic: false, discountValue: 5 }), mgr);
+    const corp = r.body;
+    await post('/api/promotions', terms({ code: 'BIGSPEND', discountType: 'FIXED_AMOUNT', discountValue: 500000, minimumSpend: 5000000 }), mgr);
+    await post('/api/promotions', terms({ code: 'LATER', validFrom: day(10), validTo: day(20) }), mgr);
+
+    r = await get('/api/promotions/public');
+    const offers = (r.body.offers || []).map((o) => o.code);
+    check('UC-G06 lists public, current codes only — not private or scheduled ones',
+      offers.includes('SPRING20') && !offers.includes('CORPONLY') && !offers.includes('LATER'), offers.join());
+    check('...and never shows usage or limits to guests', r.body.offers.every((o) => o.usedCount === undefined && o.usageLimit === undefined), '');
+
+    r = await get('/api/promotions/validate?code=spring20&subtotal=1000000');
+    check('UC-G11 preview: 20 % of 1,000,000 = 200,000', r.status === 200 && r.body.discount === 200000, JSON.stringify(r.body));
+    r = await get('/api/promotions/validate?code=NOPE99&subtotal=1000000');
+    check('UC-G11 unknown code → INVALID_VOUCHER', r.status === 400 && r.body.error.code === 'INVALID_VOUCHER', JSON.stringify(r.body));
+    r = await get('/api/promotions/validate?code=BIGSPEND&subtotal=1000000');
+    check('BR-56 below minimum spend → VOUCHER_MIN_SPEND, saying how much', r.status === 400 && r.body.error.code === 'VOUCHER_MIN_SPEND' && /5\.000\.000|5,000,000/.test(r.body.error.message), JSON.stringify(r.body));
+    r = await get('/api/promotions/validate?code=LATER&subtotal=1000000');
+    check('A scheduled code is refused until it starts', r.status === 400 && r.body.error.details.reason === 'SCHEDULED', JSON.stringify(r.body));
+
+    const holds0 = await InventoryHold.countDocuments();
+    const bookings0 = await Booking.countDocuments();
+    r = await post('/api/bookings', partyBody([{ roomTypeId: String(rt._id), adults: 1 }], { checkInDate: day(34), checkOutDate: day(35), voucherCode: 'BIGSPEND' }));
+    check('Booking below the minimum spend is refused and releases its hold',
+      r.status === 400 && r.body.error.code === 'VOUCHER_MIN_SPEND' && (await InventoryHold.countDocuments()) === holds0 && (await Booking.countDocuments()) === bookings0,
+      JSON.stringify(r.body));
+
+    r = await patch('/api/promotions/' + spring.id + '/status', { isActive: false }, mgr);
+    check('UC-M22 deactivates a code', r.status === 200 && r.body.status === 'INACTIVE', JSON.stringify(r.body));
+    r = await post('/api/bookings', partyBody([{ roomTypeId: String(rt._id), adults: 1 }], { checkInDate: day(34), checkOutDate: day(35), voucherCode: 'SPRING20' }));
+    const offersOff = (await get('/api/promotions/public')).body.offers.map((o) => o.code);
+    check('...after which bookings refuse it and it leaves the offers page',
+      r.status === 400 && r.body.error.details.reason === 'INACTIVE' && !offersOff.includes('SPRING20'), JSON.stringify(r.body));
+    r = await patch('/api/promotions/' + spring.id + '/status', { isActive: true }, mgr);
+    check('UC-M22 reactivates it', r.status === 200 && r.body.status === 'ACTIVE', JSON.stringify(r.body));
+
+    r = await post('/api/bookings', partyBody([
+      { roomTypeId: String(rt._id), adults: 1 },
+      { roomTypeId: String(suite._id), adults: 2 },
+    ], { checkInDate: day(34), checkOutDate: day(35), voucherCode: 'spring20' }), token);
+    const sRooms = await Booking.find({ reservationCode: r.body.reservationCode });
+    check('A booking with the code gets 20 % off the reservation',
+      r.status === 202 && sRooms.reduce((a, b) => a + b.discount, 0) === Math.round(sRooms.reduce((a, b) => a + b.subtotal, 0) * 0.2),
+      JSON.stringify(r.body));
+
+    r = await patch('/api/promotions/' + spring.id, { discountValue: 50 }, mgr);
+    check('BR-57 once booked with, the discount cannot change (409)', r.status === 409 && r.body.error.code === 'PROMOTION_TERMS_LOCKED', JSON.stringify(r.body));
+    r = await patch('/api/promotions/' + spring.id, { code: 'SPRING25' }, mgr);
+    check('BR-57 a code is never renamed (409)', r.status === 409 && r.body.error.code === 'PROMOTION_TERMS_LOCKED', JSON.stringify(r.body));
+    r = await patch('/api/promotions/' + spring.id, { validTo: day(60), description: 'Spring, extended' }, mgr);
+    check('UC-M21 dates and wording stay editable', r.status === 200 && r.body.validTo === day(60) && r.body.description === 'Spring, extended', JSON.stringify(r.body));
+    r = await del('/api/promotions/' + spring.id, mgr);
+    check('A code guests booked with cannot be deleted — deactivate instead (409)', r.status === 409 && r.body.error.code === 'PROMOTION_IN_USE', JSON.stringify(r.body));
+
+    await post('/api/payments/payos/webhook', payAtBank((await Payment.findOne({ bookingId: sRooms[0]._id })).gatewayOrderCode));
+    r = await get('/api/promotions', mgr);
+    const sv = r.body.promotions.find((x) => x.code === 'SPRING20');
+    check('UC-M19 usage: 1 use, 1 reservation of 2 rooms, discount given',
+      sv.usedCount === 1 && sv.usage.reservations === 1 && sv.usage.rooms === 2 && sv.usage.discountGiven === sRooms.reduce((a, b) => a + b.discount, 0),
+      JSON.stringify(sv));
+
+    r = await patch('/api/promotions/' + spring.id, { usageLimit: 1 }, mgr);
+    check('A limit equal to the uses made is allowed — and the code is USED_UP', r.status === 200 && r.body.status === 'USED_UP', JSON.stringify(r.body));
+    await Promotion.updateOne({ _id: spring.id }, { $set: { usedCount: 3 } });
+    r = await patch('/api/promotions/' + spring.id, { usageLimit: 2 }, mgr);
+    check('BR-55 a limit below the uses already made is refused', r.status === 400 && /below/.test(r.body.error.message), JSON.stringify(r.body));
+
+    r = await del('/api/promotions/' + corp.id, mgr);
+    const gone = !(await Promotion.findById(corp.id));
+    check('An unused code can be deleted', r.status === 204 && gone, 'status=' + r.status);
+
+    // BR-55 under concurrency: a guest's payment lands between the Manager's
+    // read and write. In-process, so the interleaving is exact, not hoped for.
+    const { PromotionService } = req('dist/services/promotion.service.js');
+    const mgrId = String((await User.findOne({ email: 'mgr@hms.vn' }))._id);
+    const racer = await Promotion.create({
+      code: 'RACE1', description: 'x', discountType: 'PERCENTAGE', discountValue: 5,
+      validFrom: new Date(Date.now() - 86400000), validTo: new Date(Date.now() + 30 * 86400000), usedCount: 2,
+    });
+    const realExists = Booking.exists;
+    Booking.exists = function (...args) {
+      Booking.exists = realExists;
+      return Promotion.updateOne({ _id: racer._id }, { $inc: { usedCount: 2 } }).then(() => realExists.apply(this, args));
+    };
+    let raceErr;
+    try { await PromotionService.update(String(racer._id), { usageLimit: 3 }, mgrId); } catch (e) { raceErr = e; }
+    Booking.exists = realExists;
+    const raced = await Promotion.findById(racer._id);
+    check('BR-55 a use landing mid-edit cannot leave uses above the new limit',
+      raceErr && raceErr.code === 'PROMOTION_LIMIT_BELOW_USAGE' && raced.usageLimit === 0 && raced.usedCount === 4,
+      JSON.stringify({ err: raceErr && raceErr.code, limit: raced.usageLimit, used: raced.usedCount }));
+
+    const trail = await AuditLog.find({ entityType: 'Promotion' }).select('action actorId');
+    const actions = new Set(trail.map((a) => a.action));
+    check('BR-49 every change is audited, with the Manager as actor',
+      ['PROMOTION_CREATED', 'PROMOTION_UPDATED', 'PROMOTION_DEACTIVATED', 'PROMOTION_ACTIVATED', 'PROMOTION_DELETED'].every((a) => actions.has(a)) &&
+      trail.every((a) => a.actorId),
+      [...actions].join());
+  }
 
   // ==========================================================================
   console.log('--- UC-R06 / UC-R09 front desk ---');
@@ -454,6 +721,21 @@ process.env.FRONTEND_URL = FRONTEND;
   const wb = await Booking.findById(winner.id);
   const pts = wb.customerId ? await LoyaltyAccount.findOne({ customerId: wb.customerId }) : null;
   check('BR-29 loyalty credited once, on the completed stay', !wb.customerId || (pts && pts.pointBalance === 24000), 'points=' + (pts && pts.pointBalance));
+
+  // A multi-room reservation where room 2 is someone else's (UC-R06 1.0.E2).
+  r = await post('/api/bookings', {
+    checkInDate: day(1), checkOutDate: day(2), paymentMethod: 'BANK_TRANSFER',
+    guest: { fullName: 'Le Dat', email: 'dat@x.com', phone: '0900' },
+    rooms: [{ roomTypeId: String(rt._id), adults: 1 }, { roomTypeId: String(rt._id), adults: 2, occupantName: 'Trần Thị Bé' }],
+  });
+  const famRooms = await Booking.find({ reservationCode: r.body.reservationCode }).sort({ bookingCode: 1 });
+  await post('/api/payments/payos/webhook', payAtBank((await Payment.findOne({ bookingId: famRooms[0]._id })).gatewayOrderCode));
+  const free = (await get('/api/front-desk/allocatable?roomTypeId=' + rt._id, rec1)).body.rooms[0];
+  r = await post('/api/front-desk/check-in', { bookingId: String(famRooms[1]._id), roomId: free.id, roomVersion: free.version, identity: identity('Someone Else') }, rec1);
+  check('Room 2 refuses a stranger’s ID', r.status === 403 && r.body.error.code === 'IDENTITY_MISMATCH', JSON.stringify(r.body));
+  r = await post('/api/front-desk/check-in', { bookingId: String(famRooms[1]._id), roomId: free.id, roomVersion: free.version, identity: identity('Trần Thị Bé') }, rec1);
+  check('Room 2 checks in with its own occupant’s ID (not only the booker’s)', r.status === 200 && r.body.status === 'CHECKED_IN', JSON.stringify(r.body));
+  check('...and room 1 is untouched, still waiting', (await Booking.findById(famRooms[0]._id)).status === 'CONFIRMED', '');
 
   server.close();
   fake.close();

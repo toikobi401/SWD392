@@ -105,7 +105,7 @@ participates in `Login`, `View Personal Profile`, `Submit Leave Request` and eve
 
 ## 3. Use Case Model — Complete Inventory
 
-All 120 use cases from the six use case diagrams. Column **Rel.** gives the relationship to the
+All 124 use cases from the six use case diagrams. Column **Rel.** gives the relationship to the
 base use case: `base` = directly associated with the actor, `«include»` = always executed as part
 of the base, `«extend»` = conditionally extends the base.
 
@@ -144,12 +144,12 @@ graph LR
 | UC-G03 | View Hotel Services | «extend» | Browse spa, restaurant, shuttle and other add-on services. | Medium |
 | UC-G04 | View Hotel Policies | base | Read check-in/out times, cancellation, pet and smoking policies. | Medium |
 | UC-G05 | View Customer Reviews | «extend» | Read published reviews and aggregate rating. | Medium |
-| UC-G06 | View Promotions / Offers | «extend» | Browse active promotional campaigns and seasonal offers. | Medium |
-| UC-G07 | **Book Room** | base | Create a reservation for selected room type and dates. | **High** |
+| UC-G06 | View Promotions / Offers | «extend» | See the promotion codes the hotel lists publicly, with their terms (private codes are never listed). | Medium |
+| UC-G07 | **Book Room** | base | Reserve one or more rooms (up to 5, any mix of types) for the same dates in one payment. | **High** |
 | UC-G08 | Enter Contact Information | «include» | Supply guest name, email, phone and special requests. | High |
 | UC-G09 | Select Add-on Services | «extend» | Add breakfast, airport pickup, spa to the booking. | Medium |
 | UC-G10 | **Pay for Booking** | «include» | Pay deposit or full amount via the payment gateway. | **High** |
-| UC-G11 | Apply Discount Code / Voucher | «extend» | Apply a voucher code to reduce the payable amount. | Medium |
+| UC-G11 | Apply Discount Code / Voucher | «extend» | Enter a promotion code; the system checks it and shows the discount and new total before payment. | Medium |
 | UC-G12 | Receive Email / SMS Confirmation | «include» | Receive booking confirmation with reference code. | High |
 | UC-G13 | Check Booking Status | base | Look up a reservation by code and email. | High |
 | UC-G14 | Cancel Booking | «extend» | Cancel a reservation subject to the cancellation policy. | High |
@@ -331,6 +331,7 @@ graph LR
     M --- M01[Manage Salary Structure]
     M --- M05[Manage Work Schedule]
     M --- M09[Manage Room Inventory]
+    M --- M11[Manage Promotion Codes]
     M --- M13[Approve Booking Cancellation]
     M --- M16[View Revenue Report]
     M --- M17[View Occupancy Report]
@@ -342,13 +343,16 @@ graph LR
     M06 -.->|extend| M08[Approve Attendance Correction]
     M08 -.->|extend| M08b[Approve Payroll]
     M09 ==>|include| M10[Manage Room Type / Pricing]
-    M10 -.->|extend| M11[Manage Promotion / Voucher]
     M10 -.->|extend| M12[Manage Hotel Services]
     M13 ==>|include| M14[Approve Refund Request]
     M14 -.->|extend| M15[Moderate Customer Review]
     M17 ==>|include| M18[Export Report]
+    M11 ==>|include| M19[View Promotion Usage]
+    M11 -.->|extend| M20[Create Promotion Code]
+    M11 -.->|extend| M21[Edit Promotion Code]
+    M21 -.->|extend| M22[Activate / Deactivate Promotion Code]
     classDef uc fill:#fdeaea,stroke:#ea4335,color:#111
-    class M01,M02,M03,M04,M05,M06,M07,M08,M08b,M09,M10,M11,M12,M13,M14,M15,M16,M17,M18 uc
+    class M01,M02,M03,M04,M05,M06,M07,M08,M08b,M09,M10,M11,M12,M13,M14,M15,M16,M17,M18,M19,M20,M21,M22 uc
 ```
 
 | ID | Use Case | Rel. | Summary | Priority |
@@ -364,7 +368,7 @@ graph LR
 | UC-M08b | Approve Payroll | «extend» | Lock and approve the monthly payroll run. | High |
 | UC-M09 | Manage Room Inventory | base | Add, retire and configure physical rooms. | High |
 | UC-M10 | **Manage Room Type / Pricing** | «include» | Define room types, base rates and seasonal pricing. | **High** |
-| UC-M11 | Manage Promotion / Voucher | «extend» | Create discount campaigns and voucher codes. | Medium |
+| UC-M11 | **Manage Promotion Codes** | base | List every promotion code with its status and usage; entry point to create, edit and switch codes on or off. | **High** |
 | UC-M12 | Manage Hotel Services | «extend» | Configure add-on services and their prices. | Medium |
 | UC-M13 | Approve Booking Cancellation | base | Authorize cancellations that exceed policy limits. | High |
 | UC-M14 | **Approve Refund Request** | «include» | Approve or reject a customer refund request. | **High** |
@@ -372,6 +376,10 @@ graph LR
 | UC-M16 | View Revenue Report | base | Revenue by period, channel, room type; ADR and RevPAR. | High |
 | UC-M17 | View Occupancy Report | base | Occupancy rate, arrivals, departures, forecast. | High |
 | UC-M18 | Export Report | «include» | Export a report to Excel or PDF. | Medium |
+| UC-M19 | View Promotion Usage | «include» | Uses against the limit, reservations, rooms, discount given and revenue per code. | High |
+| UC-M20 | Create Promotion Code | «extend» | Define a code: discount, validity days, usage limit, minimum spend, public or private. | High |
+| UC-M21 | Edit Promotion Code | «extend» | Change dates, limit, minimum spend, wording or visibility; the discount is fixed once used. | Medium |
+| UC-M22 | Activate / Deactivate Promotion Code | «extend» | Switch a code off (refused at once for new bookings) or back on. | Medium |
 
 ### 3.6 Admin (UC-A)
 
@@ -431,15 +439,15 @@ graph LR
 | Customer | 7 | 4 | 10 | 21 |
 | Employee | 9 | 5 | 10 | 24 |
 | Receptionist | 6 | 7 | 6 | 19 |
-| Manager | 6 | 5 | 7 | 18 |
+| Manager | 7 | 6 | 9 | 22 |
 | Admin | 6 | 4 | 9 | 19 |
-| **Total** | **42** | **29** | **49** | **120** |
+| **Total** | **43** | **30** | **51** | **124** |
 
 ---
 
 ## 4. Detailed Use Case Specifications
 
-The twelve highest-priority use cases below are specified in full. They were selected because
+The thirteen highest-priority use cases below are specified in full. They were selected because
 they carry the core business value (booking → payment → check-in → check-out → invoice),
 the critical control flows (authentication, approval workflows) and the highest architectural
 risk (concurrency on room allocation, external gateway integration).
@@ -458,6 +466,7 @@ risk (concurrency on room allocation, external gateway integration).
 | 10 | UC-C17 | Request Refund | Customer | Multi-step approval workflow |
 | 11 | UC-M06 | Approve / Reject Leave Request | Manager | Representative HR workflow |
 | 12 | UC-A06 | Assign Role to Account | Admin | Security-critical RBAC |
+| 13 | UC-M11 | Manage Promotion Codes | Manager | Gives money away; its rules are shared with booking |
 
 ---
 
@@ -610,7 +619,7 @@ live prices reflecting the applicable seasonal rate and active promotions.
 5. The system computes, for each room type, `availableCount = totalRooms − confirmedOverlappingBookings − blockedRooms`.
 6. The system filters out room types whose `availableCount` is 0 or whose capacity is below the requested occupancy.
 7. The system computes the price per room type for the stay, applying the seasonal rate for each night.
-8. The system applies any automatically-eligible promotion. *(«extend» UC-G06)*
+8. Before a search, the system lists the promotion codes currently offered to everyone, with their terms. *(«extend» UC-G06)* Codes are never applied automatically: the Guest enters one when booking (UC-G11).
 9. The system displays the result list sorted by price, with photos, capacity, amenities and total price.
 
 **Alternative Flows**
@@ -628,7 +637,7 @@ live prices reflecting the applicable seasonal rate and active promotions.
 |---|---|
 | **Priority** | High |
 | **Frequency of Use** | Highest-volume use case; thousands per day. |
-| **Business Rules** | BR-07 Max 30 nights per booking. BR-08 Max 5 rooms per search. BR-09 Price = Σ nightly seasonal rate − promotion. |
+| **Business Rules** | BR-07 Max 30 nights per booking. BR-08 At most 5 rooms in one reservation. BR-09 Price = Σ nightly seasonal rate − promotion. The search lists every room type with a free room, not only those that sleep the whole party — a party of six may take three doubles; types that fit the party in one room are listed first. |
 | **Non-functional** | Response ≤ 2 s for a 30-day window; availability results cached 60 s; must handle 500 concurrent searches. |
 
 ---
@@ -639,59 +648,68 @@ live prices reflecting the applicable seasonal rate and active promotions.
 |---|---|
 | **ID and Name** | UC-G07 — Book Room |
 | **Primary Actor** | Guest (or Customer) |
-| **Secondary Actors** | Payment Gateway, Email / SMS Service |
-| **Trigger** | The Guest clicks **Book now** on a selected room type. |
+| **Secondary Actors** | Payment Gateway (payOS), Email / SMS Service |
+| **Trigger** | The Guest chooses one or more rooms on the search results and clicks **Continue** (or **Book one room**). |
 
 **Description**
-Creates a reservation for a selected room type and date range, collects the guest contact
-details and optional add-on services, takes payment and issues a confirmation. This is the
-central revenue-producing use case of the system.
+Reserves one or more rooms for the same dates in a single transaction — a couple takes one
+room, a family of seven a suite and two doubles. The Guest gives their contact details and says
+who sleeps in which room; the rooms are paid together with one payOS payment and confirmed
+together. This is the central revenue-producing use case of the system.
+
+A booking of several rooms is a **reservation**: one `Booking` per room, sharing a
+`reservationCode`, the dates and one payOS payment. Each room keeps its own lifecycle — rooms of
+the same family may arrive at different times, and one room can be cancelled while the others
+stay (see §5.4).
 
 **Preconditions**
-- PRE-1: The selected room type has availability for the requested dates (UC-G01).
-- PRE-2: The Guest has completed a search and selected a room type.
+- PRE-1: Every chosen room type has enough free rooms for the dates (UC-G01).
+- PRE-2: The Guest has completed a search and chosen at least one room.
 
 **Postconditions**
-- POST-1: A `Booking` exists with status `CONFIRMED` and a unique booking code.
-- POST-2: Room inventory for those dates is decremented.
-- POST-3: A `Payment` record exists with status `PAID` (or `PENDING` for pay-at-hotel).
-- POST-4: A confirmation email/SMS has been sent.
-- POST-5: If the actor is a Customer, the booking is linked to their account; loyalty points are credited later, on check-out (BR-29).
+- POST-1: One `Booking` per room exists with status `CONFIRMED`, all sharing a reservation code; each room has its own booking code (`<reservation>-1`, `-2`, …; a single room's code equals the reservation code).
+- POST-2: Room inventory is decremented by one room per booking.
+- POST-3: One `Payment` per room exists with status `PAID`, all carrying the same payOS order code.
+- POST-4: One confirmation email lists every room of the reservation.
+- POST-5: If the actor is a Customer, every room is linked to their account; loyalty points are credited later, per room, on check-out (BR-29).
 
-**Normal Flow — 1.0: Online booking with immediate payment**
-1. The Guest selects a room type and clicks **Book now**.
-2. The system re-verifies availability for the dates and holds the inventory for 15 minutes.
-3. The system displays the contact form. *(«include» UC-G08 Enter Contact Information)*
-4. The Guest enters full name, email, phone and any special request.
-5. The system optionally offers add-on services. *(«extend» UC-G09 Select Add-on Services)*
-6. The Guest may select add-ons; the system recalculates the total.
-7. The system displays the booking summary: room type, dates, nights, guests, add-ons, taxes, total.
-8. The Guest may enter a voucher code. *(«extend» UC-G11 Apply Discount Code / Voucher)*
-9. The Guest confirms. The system records the booking with status `PENDING` and a booking code, then proceeds to payment. *(«include» UC-G10 Pay for Booking)* — the booking is recorded first so that every payment references a booking it can be reconciled against.
-10. On successful payment the system confirms the booking (`PENDING → CONFIRMED`, §6.4).
-11. The system commits the inventory decrement and releases the hold.
-12. The system sends the confirmation. *(«include» UC-G12 Receive Email / SMS Confirmation)*
-13. The system displays the confirmation page with the booking code.
+**Normal Flow — 1.0: Book one or more rooms, pay online**
+1. On the search results the Guest sets how many rooms of each type they want. The system keeps a running total and checks that the rooms sleep the whole party and number at most five (BR-08).
+2. The Guest continues. The system shows the contact form. *(«include» UC-G08 Enter Contact Information)*
+3. The Guest enters full name, email, phone and any special request.
+4. The system spreads the party over the rooms — one adult per room first, then the rest wherever there is a bed — and shows it. The Guest may change who sleeps where, and may name the person staying in each room if it is not themselves.
+5. The system optionally offers add-on services per room. *(«extend» UC-G09 Select Add-on Services)*
+6. The system displays the summary: dates, nights, every room with its guests and price, taxes, total.
+7. The Guest may enter a voucher code, or pick one of the listed offers, and apply it. The system checks it — active, within its days, not used up, minimum spend met — and shows the discount and the new total before payment. *(«extend» UC-G11 Apply Discount Code / Voucher)*
+8. The Guest confirms. The system re-verifies availability and **holds every room** for 15 minutes — all or nothing: if any room cannot be held, the rooms already held are released.
+9. The system prices each room, spreads the voucher discount over the rooms in proportion to their price, and records one `PENDING` booking per room under a new reservation code.
+10. The system creates **one** payOS payment link for the total, with one line per room, and one `PENDING` payment per room carrying its order code. *(«include» UC-G10 Pay for Booking)*
+11. The Guest pays once, by scanning the VietQR.
+12. On confirmation from payOS the system confirms every room (`PENDING → CONFIRMED`, §6.4), commits the inventory and releases the holds.
+13. The system sends one confirmation listing every room *(«include» UC-G12)* and counts one use of the voucher.
+14. The system displays the confirmation with the reservation code.
 
 **Alternative Flows**
-- **1.1: Pay at hotel** — at step 9 the Guest chooses "Pay at hotel"; the system creates the booking with `paymentStatus = PENDING`, requires a credit-card guarantee, and continues from step 11.
-- **1.2: Booking as a logged-in Customer** — the contact form at step 3 is pre-filled from the profile, and the booking is linked to the Customer's account. Loyalty points (1 % of room revenue, BR-12) are credited only when the stay completes (BR-29) — crediting at booking time would let a guest book, collect points and cancel.
-- **1.3: Multi-room booking** — the Guest books several rooms of the same type; steps 2–11 are performed per room within a single transaction and a single booking code.
+- **1.1: Pay at hotel** — the Guest reserves with a card guarantee and pays on arrival. *(Specified, not yet implemented: every booking is prepaid through payOS.)*
+- **1.2: Booking as a logged-in Customer** — the contact form is pre-filled from the profile and every room is linked to the Customer's account. Loyalty points (1 % of room revenue, BR-12) are credited only when each stay completes (BR-29) — crediting at booking time would let a guest book, collect points and cancel.
+- **1.3: One room** — a room type that sleeps the whole party offers **Book one room**, which skips the selection bar; the flow is otherwise identical with a reservation of one room.
 
 **Exceptions**
-- **1.0.E1 — Availability lost during the flow:** another booking consumed the last room. "This room is no longer available." Return the Guest to UC-G01 with the criteria preserved.
-- **1.0.E2 — Hold expired (15 min):** "Your session expired. Please search again." Release the hold and return to UC-G01.
-- **1.0.E3 — Payment declined:** *(see UC-G10)* the booking moves `PENDING → CANCELLED`; the hold is released; the Guest may retry. If the gateway times out instead, the booking stays `PENDING` with its hold until the gateway webhook confirms or fails it.
-- **1.0.E4 — Invalid contact data:** the system highlights the offending field and returns to step 4.
-- **1.0.E5 — Confirmation delivery failure:** the booking remains valid; the system queues a retry and displays the booking code on screen.
+- **1.0.E1 — Not enough rooms left:** at step 8 a room cannot be held because others were booked meanwhile. "Only N {type} rooms left for these dates — you asked for M." Nothing is held, booked or charged. Return to UC-G01 with the criteria preserved.
+- **1.0.E2 — Hold expired (15 min):** "The hold has ended. Search again." The payOS link closes a minute before the holds, so the Guest cannot pay for released rooms.
+- **1.0.E3 — Payment declined or cancelled:** *(see UC-G10)* every room moves `PENDING → CANCELLED` and its hold is released; the Guest may retry. On a gateway timeout the rooms stay `PENDING` with their holds until payOS confirms or fails the payment.
+- **1.0.E4 — A room over capacity or without an adult:** "Room 2 (Standard Double) sleeps at most 2." / "Room 3 needs at least one adult." Return to step 4.
+- **1.0.E5 — More than five rooms:** "At most 5 rooms can be booked together — for a group, please contact the hotel." (BR-08)
+- **1.0.E6 — Confirmation delivery failure:** the reservation remains valid; the system queues a retry and shows the reservation code on screen.
+- **1.0.E7 — Voucher refused:** at step 7, or again at step 8 because a code can be used up or switched off meanwhile. The reason is given — "This voucher has reached its usage limit", "This voucher applies to bookings of 3.000.000 ₫ or more, before tax" — and nothing is held or charged. The Guest removes the code or tries another (rules BR-52…BR-57, UC-M11).
 
 | Field | Value |
 |---|---|
 | **Priority** | High |
 | **Frequency of Use** | The primary revenue transaction; dozens to hundreds per day. |
-| **Business Rules** | BR-10 Inventory hold expires after 15 min. BR-11 Booking code format `HMS-YYYYMMDD-XXXXX`. BR-12 Loyalty accrual 1 % of room revenue for Customers, credited on check-out (BR-29). BR-13 A booking must not exceed the room-type capacity. |
-| **Non-functional** | The availability check and decrement must be atomic under concurrency (optimistic locking on the inventory document). End-to-end ≤ 5 s excluding gateway latency. |
-| **Assumptions** | The payment gateway is reachable; rates and taxes are configured. |
+| **Business Rules** | BR-08 At most 5 rooms per reservation, all for the same dates. BR-10 Holds expire after 15 min. BR-11 Code format `HMS-YYYYMMDD-XXXXX`; rooms of a multi-room reservation add `-1`, `-2`, …. BR-12 Loyalty accrual 1 % of room revenue for Customers, credited per room on check-out (BR-29). BR-13 Each room's occupancy must not exceed its capacity, and each room needs an adult. BR-51 A voucher applies to the whole reservation: its discount is spread over the rooms in proportion to their price, and it counts as **one** use, when the payment is confirmed. |
+| **Non-functional** | Holding the rooms is all-or-nothing, so a failed reservation never leaves rooms locked. Confirming a multi-room payment is exactly-once per room and sends exactly one email, even when payOS's webhook and the returning guest arrive together (verified by test: without the guard, ten concurrent confirmations sent ten emails). End-to-end ≤ 5 s excluding gateway latency. |
+| **Assumptions** | payOS is reachable; rates and taxes are configured. |
 
 ---
 
@@ -716,20 +734,20 @@ request that creates it.
 - PRE-2: payOS credentials are configured and the webhook URL is registered (UC-A12).
 
 **Postconditions**
-- POST-1: A `Payment` record exists with status `PAID`, `FAILED` or `PENDING`, carrying a unique integer payOS `orderCode`.
+- POST-1: One `Payment` record per room exists with status `PAID`, `FAILED` or `PENDING`; the rooms of one reservation all carry the same integer payOS `orderCode`.
 - POST-2: On success the bank transfer reference is stored and the booking moves `PENDING → CONFIRMED`.
 - POST-3: On failure, cancellation or expiry the booking moves `PENDING → CANCELLED` and the inventory hold is released.
 
 **Normal Flow — 1.0: VietQR payment via payOS**
 1. The system displays the amount due.
 2. The Guest may apply a voucher. *(«extend» UC-G11)* The system revalidates the code and recomputes the amount.
-3. The system creates a `Payment` record with status `PENDING`, an idempotency key and a new payOS `orderCode` — **before** calling payOS, so a timeout still leaves a record to reconcile against.
-4. The system creates a payOS payment link signed with HMAC-SHA256, with a bank memo of at most 9 characters and an expiry one minute before the 15-minute inventory hold.
+3. The system creates one `Payment` record per room with status `PENDING` and an idempotency key, all sharing a new payOS `orderCode` — **before** calling payOS, so a timeout still leaves records to reconcile against. Keeping one payment per room keeps refunds, folios and invoices per room.
+4. The system creates **one** payOS payment link for the reservation's total, with one item per room, signed with HMAC-SHA256, a bank memo of at most 9 characters and an expiry one minute before the 15-minute inventory holds.
 5. The system redirects the Guest to the payOS checkout page.
 6. The Guest scans the VietQR with a banking app and transfers the money.
 7. payOS sends a signed webhook to the system.
 8. The system verifies the webhook signature and checks that the amount received equals the amount due.
-9. The system atomically sets the `Payment` to `PAID` (exactly once), stores the bank reference, and confirms the booking.
+9. The system checks the amount against the sum of the rooms, atomically sets each room's `Payment` to `PAID` (exactly once), stores the bank reference, confirms every room, and sends one confirmation for the reservation.
 10. payOS redirects the Guest to the result page, which shows the confirmation.
 
 **Alternative Flows**
@@ -765,8 +783,9 @@ request that creates it.
 | **Trigger** | The user opens a booking and clicks **Cancel booking**. |
 
 **Description**
-Cancels an existing reservation, computes the cancellation penalty from the hotel policy,
-releases the inventory and initiates any refund due.
+Cancels a booked room, computes the cancellation penalty from the hotel policy, releases the
+inventory and initiates any refund due. In a multi-room reservation each room is cancelled on
+its own — the policy and the refund apply to that room's price, and the other rooms stay booked.
 
 **Preconditions**
 - PRE-1: The booking exists with status `CONFIRMED`.
@@ -854,11 +873,11 @@ folio can receive charges.
 - **1.1: Walk-in check-in** — no prior reservation. The Receptionist first creates one *(«extend» UC-R03 Create Walk-in Booking)* and then continues from step 3.
 - **1.2: Early check-in** — the guest arrives before the standard time. The system applies the early-check-in surcharge if a room is ready, or places the guest on a waiting list.
 - **1.3: Room upgrade** — no room of the booked type is ready but a higher type is. The Receptionist assigns the upgrade, complimentary or charged, and the system records the reason.
-- **1.4: Group check-in** — several bookings under one group code are processed together; the system assigns rooms in bulk and opens one master folio with individual sub-folios.
+- **1.4: Rooms booked together** — a multi-room reservation is checked in room by room, each with its own room and folio, so a family arriving at different times is not held up. The desk sees "room 2 of 3 booked together" to place the rooms near each other. The identity check accepts the person named as staying in that room, or the booker.
 
 **Exceptions**
 - **1.0.E1 — Booking not found:** offer to search by name/phone or to create a walk-in booking.
-- **1.0.E2 — Identity mismatch:** "The document does not match the reservation holder." Require the reservation holder or authorization; do not proceed.
+- **1.0.E2 — Identity mismatch:** "The document does not match the reservation holder." The document must belong to the booker or, when one is named, to the person staying in that room (UC-G07 step 4). Otherwise require authorization; do not proceed.
 - **1.0.E3 — Expired identity document:** "The identity document has expired." Escalate to the Manager.
 - **1.0.E4 — No vacant-clean room of the booked type:** the system offers an upgrade *(1.3)*, or flags housekeeping to prioritize a dirty room, or places the guest on a waiting list.
 - **1.0.E5 — Outstanding balance unpaid:** the check-in cannot be completed until the balance is settled or the Manager authorizes an exception.
@@ -1107,6 +1126,68 @@ balance, the staffing impact on the roster, and the overlap with other approved 
 
 ---
 
+### UC-M11 — Manage Promotion Codes
+
+| Field | Value |
+|---|---|
+| **ID and Name** | UC-M11 — Manage Promotion Codes |
+| **Primary Actor** | Manager |
+| **Secondary Actors** | Guest / Customer, who use the codes (UC-G06, UC-G11) |
+| **Trigger** | The Manager opens **Promotion codes** in the staff console — to start a campaign, answer a partner's request, or see how a code is doing. |
+
+**Description**
+Lets a Manager create and run the discount codes guests enter when they book. A code has its
+terms — a percentage or a fixed amount, the days it can be used, a usage limit and a minimum
+spend — a visibility (listed on the website, or given out privately to partners), and a live
+status. The list shows each code's usage *(«include» UC-M19)*, so every decision is made with
+what the code has brought in on screen. Creating *(UC-M20)*, editing *(UC-M21)* and switching
+a code on or off *(UC-M22)* extend it.
+
+**Preconditions**
+- PRE-1: The Manager is signed in and holds the `MANAGE_PRICING` permission.
+
+**Postconditions**
+- POST-1: The new or changed `Promotion` is stored; its code is unique and its terms satisfy BR-52…BR-56.
+- POST-2: The change is in the audit log with the Manager, the time and the values before and after (BR-49).
+- POST-3: Bookings made from now on get the new terms; bookings already made keep the discount they were given.
+
+**Normal Flow — 1.0: Create a promotion code**
+1. The Manager opens **Promotion codes**.
+2. The system lists every code with its discount, days, uses against the limit, reservations and revenue brought in, visibility and status — *Active*, *Starts later*, *Used up*, *Switched off*, *Ended* — live codes first. *(«include» UC-M19 View Promotion Usage)*
+3. The Manager selects **New code**. *(«extend» UC-M20 Create Promotion Code)*
+4. The system shows the form with defaults: 10 %, from today for 30 days, no limit, no minimum spend, not listed.
+5. The Manager enters the code, a description guests will see, the discount, the first and last day, the uses allowed, the minimum spend and whether to list it on the website. The system shows a worked example: "a reservation of 2.000.000 ₫ before tax gets 200.000 ₫ off".
+6. The Manager selects **Create code**.
+7. The system converts the code to upper case and checks the terms (BR-52…BR-56).
+8. The system checks that no code with the same letters exists, in any case.
+9. The system stores the code as active with no uses and the Manager as its creator, and records `PROMOTION_CREATED` in the audit log.
+10. The system opens the new code. If it is listed, the offers page shows it from its first day (UC-G06).
+
+**Alternative Flows**
+- **1.1: Edit a code** *(«extend» UC-M21)* — from the code, **Edit**. The code itself is read-only. If any booking has used it, the discount type and value are read-only too, with the reason (BR-57); description, days, uses allowed, minimum spend and visibility stay editable. The system checks the terms as in step 7, also refusing a limit below the uses already made (BR-55), and records `PROMOTION_UPDATED` with before and after.
+- **1.2: Switch a code off or on** *(«extend» UC-M22, extends UC-M21)* — one action from the code. Switched off, it is refused at once for new bookings and leaves the offers page; reservations already made — including one whose guest is paying at that moment — keep their discount. Records `PROMOTION_DEACTIVATED` or `PROMOTION_ACTIVATED`.
+- **1.3: Delete a mistaken code** — offered only while no booking has ever used the code, after a confirmation; records `PROMOTION_DELETED`. A used code is part of the booking and billing record and can only be switched off.
+- **1.4: Give a used-up code more uses** — edit *uses allowed* above the current uses; the status returns to *Active*.
+- **1.5: Filter** — All, Active, Starts later, Ended or used up, Switched off, each with its count.
+
+**Exceptions**
+- **1.0.E1 — Invalid terms:** each problem is named — "A percentage discount cannot exceed 100 %", "The end date must be on or after the start date", "Code must be 4 to 20 letters or digits, with no spaces", "The end date is already in the past". Nothing is stored. Return to step 5.
+- **1.0.E2 — Code already exists:** "The code WELCOME10 already exists — choose another." If two Managers create the same code at the same moment, the unique index admits one and the other gets this message.
+- **1.0.E3 — Not permitted:** a Receptionist, Admin or Customer gets 403 and never sees the menu entry.
+- **1.1.E1 — A fixed term changed:** "Guests have already booked with this code, so its discount cannot change. Create a new code for new terms." (BR-57)
+- **1.1.E2 — Limit below uses:** "Usage limit cannot be below the N uses already made." If a guest's payment lands between the Manager opening the form and saving it, so that the uses overtake the new limit, the save is refused ("The code was used again while you were editing") instead of leaving more uses than the limit allows.
+- **1.3.E1 — Delete a used code:** "Guests have booked with this code, so it stays on record. Deactivate it instead."
+
+| Field | Value |
+|---|---|
+| **Priority** | High — every code gives money away. |
+| **Frequency of Use** | A few codes a month; the list is checked daily during a campaign. |
+| **Business Rules** | BR-52 A code is 4–20 letters or digits, stored upper-case, unique in any case, and never renamed — it has been printed and sent to guests. BR-53 A percentage is a whole number from 1 to 100; a fixed amount a whole number of đồng above zero; a discount never exceeds the amount it discounts. BR-54 A code is valid on a range of hotel calendar days (Asia/Ho_Chi_Minh), first and last day included, judged on the day of **booking**, not the stay dates. BR-55 The usage limit counts reservations (0 = no limit); one reservation is one use, counted when its payment is confirmed (BR-51); a limit may not be set below the uses already made. BR-56 Minimum spend is measured on the whole reservation before tax; below it the code is refused with the amount needed, never silently ignored. BR-57 Once any booking has used a code, its discount type and value are fixed. |
+| **Non-functional** | One rule object (`PromotionRule`) serves the Manager's form, the guest's preview (UC-G11) and the booking itself (UC-G07), so the three cannot disagree. The usage of every code is computed in one aggregate query. The limit is written with a conditional update, so a concurrent use can never leave uses above it (verified by test, with a negative control). |
+| **Known limitations** | Because a use is counted at payment (BR-51), guests already paying when the last use is taken still complete, so a limit can be exceeded by those few; refusing them would mean refusing money already sent. The UC-G11 preview is public and not rate-limited, so a private code could in principle be guessed by trying many; the mitigation — codes of 8 or more characters and a rate limit at the reverse proxy — is not yet in place. |
+
+---
+
 ### UC-A06 — Assign Role to Account
 
 | Field | Value |
@@ -1266,6 +1347,8 @@ classDiagram
     class Booking {
         +String bookingId
         +String bookingCode
+        +String reservationCode
+        +String occupantName
         +Date checkInDate
         +Date checkOutDate
         +int adults
@@ -1299,6 +1382,7 @@ classDiagram
         +PaymentMethod method
         +PaymentStatus status
         +String gatewayRef
+        +Number gatewayOrderCode
         +String idempotencyKey
     }
 
@@ -1329,12 +1413,16 @@ classDiagram
     class Promotion {
         +String promotionId
         +String code
+        +String description
         +DiscountType discountType
         +Number discountValue
         +Date validFrom
         +Date validTo
         +int usageLimit
-        +isValid(date) bool
+        +int usedCount
+        +Money minimumSpend
+        +bool isActive
+        +bool isPublic
     }
 
     class Review {
@@ -1422,14 +1510,36 @@ classDiagram
 
 | Entity | Key invariants |
 |---|---|
-| `Booking` | `checkOutDate > checkInDate`; `nights ≤ 30`; `adults + children ≤ roomType.capacity`; status transitions only along `PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT`, with `CANCELLED` reachable only before `CHECKED_IN`. |
+| `Booking` | `checkOutDate > checkInDate`; `nights ≤ 30`; `adults ≥ 1` and `adults + children ≤ roomType.capacity`; status transitions only along `PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT`, with `CANCELLED` reachable only before `CHECKED_IN`. |
+| Reservation (`reservationCode`) | 1 to 5 bookings (BR-08); every booking shares the dates and the booker; their payments share one payOS `gatewayOrderCode`, and the link amount equals the sum of the rooms. |
 | `Room` | A room has at most one active stay at a time (BR-25); status ∈ {`VACANT_CLEAN`, `VACANT_DIRTY`, `OCCUPIED`, `OUT_OF_ORDER`, `INSPECTED`}. |
-| `Payment` | `amount > 0`; immutable once `PAID`; `idempotencyKey` unique; corrections only by reversal (BR-33). |
+| `Payment` | `amount > 0`; immutable once `PAID`; `idempotencyKey` unique; `gatewayOrderCode` unique per payOS link but shared by the rooms of one reservation; corrections only by reversal (BR-33). |
 | `Invoice` | `invoiceNumber` strictly sequential and gapless; immutable once issued (BR-30). |
 | `RefundRequest` | `approvedAmount ≤ requestedAmount ≤ sum(payments.amount)` (BR-37). |
 | `LeaveRequest` | `days ≤ leaveBalance` unless explicitly unpaid (BR-40); `approverId ≠ employeeId` (BR-44). |
 | `LoyaltyAccount` | `pointBalance ≥ 0`; accrual only on `CHECKED_OUT` stays (BR-29). |
+| `Promotion` | `code` matches `^[A-Z0-9]{4,20}$` and is unique; `0 < discountValue ≤ 100` for a percentage; `validTo > validFrom`; `usedCount` equals the paid reservations that used it; `discountType`/`discountValue` fixed once used (BR-52…BR-57). |
 | `AuditLog` | Append-only; never updated or deleted (BR-49). |
+
+### 5.4 Design Decision — A Reservation Is a Group of Room Bookings
+
+Booking several rooms at once could be modelled as one `Booking` holding a list of rooms, or as
+one `Booking` per room grouped by a shared code. HMS uses **one Booking per room**, grouped by
+`reservationCode`:
+
+| Concern | One Booking with a list of rooms | One Booking per room (chosen) |
+|---|---|---|
+| Rooms arriving or leaving at different times | Needs per-line state inside one document | Each room has its own lifecycle already (§6.4) |
+| Cancelling one room of three | Partial-cancel logic, partial refunds | The existing per-room cancel and refund |
+| Availability (UC-G01) | Must count lines, not documents | Unchanged — counts bookings |
+| Room allocation, folio, invoice | Per line, all new | Unchanged — per booking |
+| Paying once | Natural | One payOS link; one `Payment` per room sharing its `orderCode` |
+
+The rejected alternative was, in effect, the original design: a `roomCount` field on a single
+booking. That was defective — it held and charged for *n* rooms but consumed one room of
+inventory and allocated one room at check-in. `Reservation` is not a separate entity class: it
+has no state of its own beyond what its rooms carry, so it is represented by the shared code and
+reconstructed by query.
 
 ---
 
@@ -1485,6 +1595,7 @@ graph TB
 | `FrontDeskPage` | Check-in / check-out console | UC-R06, UC-R09 |
 | `RoomRackPage` | Room availability and status board | UC-R12, UC-R13 |
 | `ApprovalQueuePage` | Manager pending approvals | UC-M06, UC-M14 |
+| `PromotionsPage` | Promotion codes: list with usage, create, edit, switch on/off | UC-M11, UC-M19…M22 |
 | `AccountAdminPage` | Accounts and role assignment | UC-A01, UC-A06 |
 
 **«boundary» — I/O and proxy objects (Express)**
@@ -1494,6 +1605,7 @@ graph TB
 | `AuthController` | HTTP boundary for authentication |
 | `BookingController` | HTTP boundary for booking operations |
 | `CheckInController` | HTTP boundary for front-desk operations |
+| `PromotionController` | HTTP boundary for promotion codes and the public offers / preview |
 | `PaymentGatewayProxy` | Encapsulates the external payment gateway protocol |
 | `NotificationProxy` | Encapsulates the email/SMS provider protocol |
 
@@ -1511,6 +1623,7 @@ graph TB
 | `CheckInCoordinator` | coordinator | UC-R06: verify → allocate → collect → activate |
 | `CheckOutCoordinator` | coordinator | UC-R09: consolidate → invoice → settle → release |
 | `RefundCoordinator` | coordinator | UC-C17 + UC-M14 approval chain |
+| `PromotionService` | coordinator | UC-M11: validate → check uniqueness / locks → conditional write → audit; the one entry point for UC-G06, UC-G11 and UC-G07 step 8 |
 | `BookingStateMachine` | state dependent | `Booking` lifecycle transitions |
 | `RoomStateMachine` | state dependent | `Room` status transitions |
 | `HoldExpiryTimer` | timer | Releases inventory holds after 15 min (BR-10) |
@@ -1523,7 +1636,7 @@ graph TB
 | `PricingRule` | business logic | Nightly seasonal rate, taxes, totals (BR-09) |
 | `CancellationPolicyRule` | business logic | Penalty tiers (BR-17…BR-19) |
 | `LoyaltyRule` | business logic | Accrual and redemption (BR-12, BR-29) |
-| `PromotionRule` | business logic | Voucher validity and discount computation |
+| `PromotionRule` | business logic | Code status, whether a code applies (incl. minimum spend), valid terms, locked terms (BR-52…BR-57) |
 | `LeavePolicyRule` | business logic | Balance, coverage, blackout (BR-40…BR-44) |
 | `AvailabilityCalculator` | algorithm | Availability over a date range |
 | `RoomAllocator` | algorithm | Race-free selection of a vacant-clean room (BR-25) |
@@ -1549,12 +1662,14 @@ sequenceDiagram
     G->>UI: select room type, submit
     UI->>BC: POST /api/bookings
     BC->>CO: bookRoom(command)
-    CO->>AV: hold(typeId, range, 15 min)
-    CO->>BK: create(status=PENDING)
-    CO->>PS: charge(amount, bookingId)
-    PS->>PS: Payment(PENDING, orderCode)
+    loop each room (1–5), all or nothing
+        CO->>AV: hold(typeId, range, 15 min)
+    end
+    CO->>BK: create one PENDING booking per room
+    CO->>PS: chargeReservation(rooms)
+    PS->>PS: one Payment per room, shared orderCode
     PS->>PG: charge(orderCode, amount)
-    PG->>PO: POST /v2/payment-requests (HMAC signed)
+    PG->>PO: POST /v2/payment-requests (total, one item per room)
     PO-->>PG: checkoutUrl, qrCode
     PG-->>CO: PENDING + checkoutUrl
     CO-->>BC: booking PENDING, paymentUrl
@@ -1564,8 +1679,8 @@ sequenceDiagram
     PO->>PC: webhook (HMAC signed)
     PC->>PS: handleWebhook(body)
     PS->>PG: verifyWebhook(signature)
-    PS->>PS: PENDING → PAID (atomic, once)
-    PS->>BK: PAYMENT_CAPTURED (PENDING → CONFIRMED)
+    PS->>PS: each room PENDING → PAID (atomic, once)
+    PS->>BK: PAYMENT_CAPTURED for every room
     PO-->>UI: redirect to /payment/result/{orderCode}
     UI->>PC: GET reconcile(orderCode)
     PC-->>UI: PAID, CONFIRMED
@@ -1708,7 +1823,7 @@ graph LR
 | Booking & Reservation | Search, book, modify, cancel | UC-G01, UC-G07, UC-G13…G15, UC-R03…R05 |
 | Front Desk Operations | Check-in/out, room status, folio | UC-R06…R14, UC-R19 |
 | Billing & Payment | Payments, invoices, refunds | UC-G10, UC-R15…R18, UC-C17, UC-M14 |
-| Inventory & Pricing | Rooms, room types, rates, promotions | UC-M09…M12 |
+| Inventory & Pricing | Rooms, room types, rates, promotion codes | UC-M09…M12, UC-M19…M22, UC-G06, UC-G11 |
 | HR & Payroll | Attendance, shifts, leave, payroll | UC-E09…E24, UC-M01…M08b |
 | Customer & Loyalty | Profile, reviews, points | UC-C06…C21, UC-M15 |
 | Reporting & Analytics | Revenue, occupancy, exports | UC-M16…M18 |
@@ -1832,6 +1947,7 @@ graph TB
         pHr["📦 hr<br/>LeaveApprovalService"]
         pAdmin["📦 admin<br/>RoleAssignmentService · AuditService"]
         pRpt["📦 reporting<br/>ReportingService"]
+        pPrice["📦 pricing<br/>PromotionService"]
     end
 
     subgraph rules["📦 server/rules — «application logic»"]
@@ -1842,6 +1958,7 @@ graph TB
         rLeave["LeavePolicyRule"]
         rState["Booking/RoomStateMachine"]
         rInv["InvoiceNumberGenerator"]
+        rPromo["PromotionRule"]
     end
 
     pBook --> rPrice
@@ -1859,11 +1976,15 @@ graph TB
     pBook --> pAdmin
     pFront --> pAdmin
     pBill --> pAdmin
+    pBook --> pPrice
+    pPrice --> rPromo
+    pPrice --> rPrice
+    pPrice --> pAdmin
 
     classDef s fill:#eaf7ee,stroke:#34a853,color:#111
     classDef r fill:#f3e8fd,stroke:#a142f4,color:#111
-    class pAuth,pBook,pFront,pBill,pHr,pAdmin,pRpt s
-    class rPrice,rCancel,rAvail,rAlloc,rLeave,rState,rInv r
+    class pAuth,pBook,pFront,pBill,pHr,pAdmin,pRpt,pPrice s
+    class rPrice,rCancel,rAvail,rAlloc,rLeave,rState,rInv,rPromo r
 ```
 
 #### 7.4.4 Package Responsibilities and Dependency Rules
@@ -1939,11 +2060,11 @@ graph TB
 | POST | `/api/auth/forgot-password` | UC-C03 | public |
 | GET | `/api/rooms/search` | UC-G01 | public |
 | GET | `/api/room-types/:id` | UC-G02 | public |
-| POST | `/api/bookings` | UC-G07 | public / customer |
+| POST | `/api/bookings` — body `rooms: [{roomTypeId, adults, children, occupantName?}]` | UC-G07 | public / customer |
 | POST | `/api/payments/payos/webhook` | UC-G10 step 7–9 | payOS (HMAC-signed, no JWT) |
 | GET | `/api/payments/payos/:orderCode/reconcile` | UC-G10 alt. 1.1 | public (returns statuses only) |
 | POST | `/api/payments/payos/confirm-webhook` | UC-A12 | admin (`MANAGE_SETTINGS`) |
-| GET | `/api/bookings/lookup` | UC-G13 | public |
+| GET | `/api/bookings/lookup` — reservation or room code + email, returns every room | UC-G13 | public |
 | POST | `/api/bookings/:id/cancel` | UC-G14 | customer / receptionist |
 | GET | `/api/me/bookings` | UC-C11 | customer |
 | POST | `/api/refund-requests` | UC-C17 | customer |
@@ -1954,6 +2075,13 @@ graph TB
 | PATCH | `/api/rooms/:id/status` | UC-R13 | receptionist |
 | PATCH | `/api/leave-requests/:id/decision` | UC-M06 | manager |
 | PATCH | `/api/refund-requests/:id/decision` | UC-M14 | manager |
+| GET | `/api/promotions/public` | UC-G06 | public (public codes only, never usage) |
+| GET | `/api/promotions/validate?code=&subtotal=` | UC-G11 | public (preview; the booking re-checks) |
+| GET | `/api/promotions` | UC-M11 + UC-M19 | manager (`MANAGE_PRICING`) |
+| POST | `/api/promotions` | UC-M20 | manager (`MANAGE_PRICING`) |
+| PATCH | `/api/promotions/:id` | UC-M21 | manager (`MANAGE_PRICING`) |
+| PATCH | `/api/promotions/:id/status` | UC-M22 | manager (`MANAGE_PRICING`) |
+| DELETE | `/api/promotions/:id` | UC-M11 alt. 1.3 (unused codes only) | manager (`MANAGE_PRICING`) |
 | GET | `/api/reports/revenue` | UC-M16 | manager |
 | POST | `/api/accounts/:id/roles` | UC-A06 | admin |
 | GET | `/api/audit-logs` | UC-A13 | admin |
@@ -2010,6 +2138,7 @@ realize it and to the code artifacts that implement it.
 | UC-C17 Request Refund | `MyBookingsPage`, `RefundController` | `RefundCoordinator` | — | `RefundRequest`, `Payment` | `workflow.controller.ts`, `refund.service.ts` |
 | UC-M06 Approve Leave | `ApprovalQueuePage`, `LeaveController` | `LeaveApprovalService` | `LeavePolicyRule` | `LeaveRequest`, `Employee`, `Shift` | `ApprovalQueuePage.tsx`, `leave.service.ts`, `leave-policy.rule.ts` |
 | UC-A06 Assign Role | `AccountAdminPage`†, `AccountController` | `RoleAssignmentService` | `AuditService` | `User`, `Role`, `AuditLog` | `workflow.controller.ts`, `role.service.ts` |
+| UC-M11 Manage Promotion Codes (+ M19…M22) | `PromotionsPage`, `PromotionController` | `PromotionService` | `PromotionRule`, `PricingRule`, `AuditService` | `Promotion`, `Booking`, `AuditLog` | `PromotionsPage.tsx`, `promotion.controller.ts`, `promotion.service.ts`, `promotion.rule.ts` |
 
 † Designed in §6.2 but not yet implemented in the client boilerplate; the server endpoint exists and is exercised by the API.
 
@@ -2023,8 +2152,10 @@ implemented name.
    into one `FrontDeskController`, since all three serve the same desk screen.
 3. **`HoldExpiryTimer`** is realized as a MongoDB TTL index on `InventoryHold`
    (`expires: 0` on `expiresAt`) — the database is the timer.
-4. **`PromotionRule`** is split between `Promotion.isValidOn()` (validity) and
-   `PricingRule.discountFor()` (amount). **`LoyaltyRule`** is inline in
+4. **`PromotionRule`** decides whether a code applies and whether its terms are
+   valid; `PricingRule.discountFor()` computes the amount. `PromotionService` is
+   the single entry point used by the Manager's screen, the guest's preview and
+   `BookingCoordinator`. **`LoyaltyRule`** is inline in
    `CheckOutCoordinator` (1 % of room revenue, BR-12/BR-29).
 5. **`FolioLedger`** was added during implementation: the single entry point for
    posting a charge, which writes the VAT line with it so the folio balance is
@@ -2036,6 +2167,7 @@ implemented name.
 
 | Artifact | Location |
 |---|---|
-| Use case diagrams | `uc_diagram/{Guest,Customer,Employee,Receptionist,Manager,Admin}.drawio` |
+| Use case diagrams | `diagrams/{Guest,Customer,Employee,Receptionist,Manager,Admin}.drawio` |
+| Package diagram | `diagrams/package_diagram.drawio` |
 | Boilerplate code | `System Design and Overall Architecture/src/` |
 | Course material | `material/Ch05–Ch08`, `material/Ch20` |

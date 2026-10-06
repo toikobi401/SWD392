@@ -84,7 +84,10 @@ export function StaffLayout() {
     },
     {
       title: 'Management',
-      items: [{ to: '/staff/approvals', label: 'Approvals', show: can('APPROVE_LEAVE') || can('APPROVE_REFUND') }],
+      items: [
+        { to: '/staff/approvals', label: 'Approvals', show: can('APPROVE_LEAVE') || can('APPROVE_REFUND') },
+        { to: '/staff/promotions', label: 'Promotion codes', show: can('MANAGE_PRICING') },
+      ],
     },
     {
       title: 'Administration',

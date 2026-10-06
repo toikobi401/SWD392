@@ -244,11 +244,16 @@ export class CheckInCoordinator {
     }
 
     // A loose name comparison — the receptionist makes the final judgement.
+    // Either the person staying in this room or the booker may check it in:
+    // in a multi-room reservation the second room is often someone else's.
     const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
-    if (normalize(identity.fullName) !== normalize(booking.guest.fullName)) {
+    const allowed = [booking.occupantName, booking.guest.fullName].filter(Boolean).map((n) => normalize(n!));
+    if (!allowed.includes(normalize(identity.fullName))) {
       throw new AppError(
         'IDENTITY_MISMATCH',
-        'The document does not match the reservation holder',
+        booking.occupantName
+          ? `The document must be ${booking.occupantName}'s (staying in this room) or ${booking.guest.fullName}'s (who booked)`
+          : 'The document does not match the reservation holder',
         403,
       );
     }

@@ -790,3 +790,171 @@ dl.facts dd { margin: 0; font-weight: 500; }
   .floor-label { padding-top: 0; }
   .fob { width: 52px; height: 68px; }
 }
+
+/* ==========================================================================
+   Multi-room booking
+   ========================================================================== */
+
+.room-card.chosen { border-color: var(--brass); box-shadow: inset 3px 0 0 var(--brass); }
+
+.qty {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  overflow: hidden;
+}
+.qty button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  font: 600 var(--fs-lg) / 1 var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+}
+.qty button:hover:not(:disabled) { background: var(--paper); }
+.qty button:disabled { color: var(--line-strong); cursor: not-allowed; }
+.qty output {
+  min-width: 34px;
+  text-align: center;
+  font: 700 var(--fs-md) / 1 var(--font-display);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 9px 0;
+}
+
+.selection-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  background: var(--ink);
+  color: #d6dee6;
+  box-shadow: 0 -8px 24px rgba(27, 42, 58, 0.18);
+}
+.selection-bar .inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.selection-bar strong { color: #fff; display: block; }
+.selection-bar .muted { color: #9fb0c1; font-size: var(--fs-sm); }
+.selection-bar .warn-text { color: #f3c77a; font-size: var(--fs-sm); }
+.selection-bar .money { font: 700 var(--fs-xl) / 1 var(--font-display); color: #fff; }
+.selection-bar .btn { background: var(--brass); border-color: var(--brass); }
+.selection-bar .btn:hover { background: #926f2f; }
+
+.room-line {
+  display: grid;
+  grid-template-columns: 1fr 96px 96px;
+  gap: 12px;
+  align-items: end;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.room-line > div { display: flex; flex-direction: column; gap: 2px; }
+.field.inline { font-size: var(--fs-xs); color: var(--muted); }
+.field.inline input { min-height: 36px; }
+.room-line .occupant { grid-column: 1 / -1; }
+
+.summary-rooms { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.summary-rooms li { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-sm); }
+.summary-rooms li > span:first-child { display: flex; flex-direction: column; }
+
+.sibling-rooms { list-style: none; margin: 0; padding: 0; }
+.sibling-rooms li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+.sibling-rooms li:first-child { border-top: 0; }
+.sibling-rooms li.current { font-weight: 600; }
+
+@media (max-width: 640px) {
+  .room-line { grid-template-columns: 1fr 1fr; }
+  .room-line > div { grid-column: 1 / -1; }
+}
+
+/* ---- Promotion codes (UC-M11, UC-G06, UC-G11) ----------------------------
+   A code is drawn as the stub a guest types: a notched ticket edge in brass.
+   It is the one decorative element; everything around it stays plain. */
+
+.badge.scheduled { background: var(--occupied-bg); color: var(--occupied); }
+.badge.expired, .badge.inactive { background: #eef1f3; color: var(--muted); }
+.badge.used_up { background: var(--dirty-bg); color: var(--dirty); }
+
+.code-tag {
+  display: inline-block;
+  position: relative;
+  padding: 3px 12px 3px 14px;
+  border: 1px dashed var(--brass);
+  border-radius: 3px;
+  background: var(--brass-soft);
+  color: var(--ink);
+  font: 700 var(--fs-sm) / 1.3 var(--font-display);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+/* the punched hole of a ticket stub */
+.code-tag::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  /* the hole shows whatever the tag sits on */
+  background: var(--hole, var(--surface));
+  border-right: 1px dashed var(--brass);
+}
+.notice.ok { --hole: var(--ok-bg); }
+table.data tr.clickable:hover { --hole: #f7f9fa; }
+.code-tag.large { font-size: var(--fs-lg); padding: 4px 14px 4px 18px; cursor: default; }
+.code-tag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.code-input { font-family: var(--font-display) !important; font-weight: 700 !important; letter-spacing: 0.08em; }
+
+.clamp { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; }
+
+.uses { display: flex; flex-direction: column; gap: 4px; min-width: 70px; }
+.meter { display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--brass); }
+
+fieldset.field.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.field.plain legend { padding: 0; margin-bottom: 5px; font-weight: 500; }
+fieldset:disabled .check { cursor: not-allowed; opacity: 0.6; }
+.with-unit { display: inline-flex; align-items: center; gap: 6px; }
+.with-unit .input { width: 140px; }
+.with-unit .unit { color: var(--muted); font-weight: 600; }
+
+/* Voucher on the booking summary */
+.voucher { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.voucher .field { flex: 1; min-width: 160px; max-width: 240px; }
+.voucher-applied { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.offer-picks { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.discount-line { color: var(--clean); }
+
+/* Home: current offers under the search */
+.offers { margin: -12px 0 32px; display: flex; flex-direction: column; gap: 10px; }
+.offer-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.offer-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+.offer-list .code-tag { align-self: flex-start; cursor: default; }
+
+/* A field that cannot change says so visually, not only when clicked. */
+.input:disabled,
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled { background: var(--paper); color: var(--muted); border-color: var(--line); cursor: not-allowed; }

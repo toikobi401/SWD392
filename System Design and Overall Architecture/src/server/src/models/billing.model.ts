@@ -86,8 +86,9 @@ export interface IPayment extends Document {
   gatewayMessage?: string;
   /**
    * payOS requires an integer `orderCode`, unique per merchant for all time —
-   * it cannot reuse our UUID idempotency key. The webhook identifies the
-   * payment by this number.
+   * it cannot reuse our UUID idempotency key. One payOS link pays a whole
+   * reservation, so the rooms' payments share this number and the webhook
+   * settles all of them together.
    */
   gatewayOrderCode?: number;
   /** Hosted checkout page the guest is redirected to (UC-G10 step 5). */
@@ -96,6 +97,8 @@ export interface IPayment extends Document {
   qrCode?: string;
   /** When the payOS link stops accepting payment. */
   expiresAt?: Date;
+  /** Set once the reservation confirmation was sent (UC-G12, exactly once). */
+  notifiedAt?: Date;
   /** Null for an online payment; set to the cashier for a desk payment (BR-31). */
   cashierId?: Types.ObjectId;
   drawerSessionId?: Types.ObjectId;
@@ -118,11 +121,14 @@ const paymentSchema = new Schema<IPayment>(
     idempotencyKey: { type: String, required: true, unique: true },
     gatewayRef: String,
     gatewayMessage: String,
-    // sparse: cash and voucher payments never get a gateway order code.
-    gatewayOrderCode: { type: Number, unique: true, sparse: true },
+    // Not unique: every room of a reservation carries the same order code.
+    // Uniqueness per payOS link comes from the generator, and payOS itself
+    // rejects a reused code. Sparse: cash never gets one.
+    gatewayOrderCode: { type: Number, index: true, sparse: true },
     checkoutUrl: String,
     qrCode: String,
     expiresAt: Date,
+    notifiedAt: Date,
     cashierId: { type: Schema.Types.ObjectId, ref: 'User' },
     drawerSessionId: { type: Schema.Types.ObjectId, ref: 'DrawerSession' },
     paidAt: Date,

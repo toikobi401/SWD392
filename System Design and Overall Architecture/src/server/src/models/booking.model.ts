@@ -95,8 +95,21 @@ export interface IBookingGuest {
 
 export interface IBooking extends Document {
   bookingCode: string;
+  /**
+   * The reservation this room belongs to. A guest can book several rooms at
+   * once; each room is its own Booking (its own lifecycle, folio and invoice)
+   * and they share this code, one payOS payment and the same dates. A
+   * single-room reservation's code equals its booking code.
+   */
+  reservationCode: string;
   customerId?: Types.ObjectId; // absent for an unregistered Guest
+  /** The person who booked and paid — the same on every room of a reservation. */
   guest: IBookingGuest;
+  /**
+   * Who sleeps in this room, when it is not the booker — e.g. the parents in
+   * the second room of a family reservation. Check-in accepts either name.
+   */
+  occupantName?: string;
   roomTypeId: Types.ObjectId;
   roomId?: Types.ObjectId; // allocated at check-in (UC-R08)
   checkInDate: Date;
@@ -124,8 +137,10 @@ export interface IBooking extends Document {
 
 const bookingSchema = new Schema<IBooking>(
   {
-    // BR-11: format HMS-YYYYMMDD-XXXXX.
+    // BR-11: format HMS-YYYYMMDD-XXXXX; rooms of a multi-room reservation
+    // add -1, -2, … to the reservation code.
     bookingCode: { type: String, required: true, unique: true, index: true },
+    reservationCode: { type: String, index: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     guest: {
       fullName: { type: String, required: true },
@@ -133,6 +148,7 @@ const bookingSchema = new Schema<IBooking>(
       phone: { type: String, required: true },
       specialRequest: String,
     },
+    occupantName: { type: String, trim: true },
     roomTypeId: { type: Schema.Types.ObjectId, ref: 'RoomType', required: true },
     roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
     checkInDate: { type: Date, required: true, index: true },
@@ -152,7 +168,8 @@ const bookingSchema = new Schema<IBooking>(
         price: Number,
       },
     ],
-    promotionId: { type: Schema.Types.ObjectId, ref: 'Promotion' },
+    // Indexed: UC-M11 counts the bookings made with each code.
+    promotionId: { type: Schema.Types.ObjectId, ref: 'Promotion', index: true, sparse: true },
     subtotal: { type: Number, required: true, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     tax: { type: Number, default: 0, min: 0 },
@@ -168,6 +185,8 @@ const bookingSchema = new Schema<IBooking>(
 
 // Invariant §5.3: check-out must follow check-in, stay ≤ 30 nights (BR-07).
 bookingSchema.pre('validate', function (next) {
+  // A booking made on its own is a reservation of one room.
+  if (!this.reservationCode) this.reservationCode = this.bookingCode;
   if (this.checkOutDate <= this.checkInDate) {
     return next(new Error('checkOutDate must be after checkInDate'));
   }
@@ -248,7 +267,9 @@ export interface IPromotion extends Document {
   usedCount: number;
   minimumSpend: number;
   isActive: boolean;
-  isValidOn(date: Date): boolean;
+  /** Listed on the public offers page (UC-G06); a private code is only given out. */
+  isPublic: boolean;
+  createdBy?: Types.ObjectId;
 }
 
 const promotionSchema = new Schema<IPromotion>(
@@ -263,17 +284,12 @@ const promotionSchema = new Schema<IPromotion>(
     usedCount: { type: Number, default: 0 },
     minimumSpend: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    isPublic: { type: Boolean, default: false },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },
 );
-
-// UC-G10 exception 1.0.E5 — expired or exhausted voucher.
-promotionSchema.methods.isValidOn = function (date: Date): boolean {
-  if (!this.isActive) return false;
-  if (date < this.validFrom || date > this.validTo) return false;
-  if (this.usageLimit > 0 && this.usedCount >= this.usageLimit) return false;
-  return true;
-};
+// When a promotion applies is decided by PromotionRule, not here (§9 note 4).
 
 export const Promotion = model<IPromotion>('Promotion', promotionSchema);
 

@@ -22,18 +22,12 @@ export class RoomController {
     const checkOut = new Date(String(req.query.checkOut));
     const adults = Number(req.query.adults ?? 1);
     const children = Number(req.query.children ?? 0);
-    const roomCount = Number(req.query.rooms ?? 1);
 
     if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
       throw new AppError('INVALID_DATE', 'checkIn and checkOut must be valid dates', 400);
     }
 
-    const results = await RoomQueries.searchPriced(
-      checkIn,
-      checkOut,
-      adults + children,
-      roomCount,
-    );
+    const results = await RoomQueries.searchPriced(checkIn, checkOut, adults + children);
 
     // UC-G01 exception 1.0.E4 — an empty result is a normal outcome, not a 404.
     res.json({ checkIn, checkOut, results, count: results.length });
@@ -51,31 +45,44 @@ export class RoomController {
 }
 
 export class BookingController {
-  /** POST /api/bookings — UC-G07 (Guest or signed-in Customer) */
+  /**
+   * POST /api/bookings — UC-G07 (Guest or signed-in Customer).
+   * Body: `rooms: [{ roomTypeId, adults, children }]` for one or more rooms,
+   * or the older single-room fields `roomTypeId`, `adults`, `children`.
+   */
   static async create(req: Request, res: Response): Promise<void> {
     const result = await BookingCoordinator.bookRoom({
+      rooms: Array.isArray(req.body.rooms) ? req.body.rooms : undefined,
       roomTypeId: req.body.roomTypeId,
+      adults: req.body.adults !== undefined ? Number(req.body.adults) : undefined,
+      children: Number(req.body.children ?? 0),
+      roomCount: req.body.roomCount !== undefined ? Number(req.body.roomCount) : undefined,
+      addOnServiceIds: req.body.addOnServices,
       checkInDate: new Date(req.body.checkInDate),
       checkOutDate: new Date(req.body.checkOutDate),
-      adults: Number(req.body.adults),
-      children: Number(req.body.children ?? 0),
-      roomCount: Number(req.body.roomCount ?? 1),
       guest: req.body.guest,
-      addOnServiceIds: req.body.addOnServices,
       voucherCode: req.body.voucherCode,
       paymentMethod: req.body.paymentMethod as PaymentMethod,
       // Set only when authenticated — UC-G07 alternative flow 1.2.
       customerId: req.auth?.sub,
     });
 
-    // 202 when the gateway has not confirmed yet: the booking exists but is
-    // PENDING, and the client should say "confirming payment", not "confirmed".
+    // 202 while payOS has not confirmed: the rooms exist but are PENDING, and
+    // the client should say "confirming payment", not "confirmed".
     res.status(result.paymentPending ? 202 : 201).json({
+      reservationCode: result.reservationCode,
       bookingCode: result.booking.bookingCode,
       status: result.booking.status,
-      total: result.booking.totalAmount,
+      total: result.total,
       checkIn: result.booking.checkInDate,
       checkOut: result.booking.checkOutDate,
+      rooms: result.bookings.map((b) => ({
+        bookingCode: b.bookingCode,
+        roomTypeId: b.roomTypeId,
+        adults: b.adults,
+        children: b.children,
+        total: b.totalAmount,
+      })),
       paymentUrl: result.paymentUrl,
       paymentPending: Boolean(result.paymentPending),
     });
@@ -92,11 +99,10 @@ export class BookingController {
     res.json({ bookings, count: bookings.length });
   }
 
-  /** GET /api/bookings/:id — UC-C12 / UC-R02 */
+  /** GET /api/bookings/:id — UC-C12 / UC-R02, with the rest of its reservation */
   static async detail(req: Request, res: Response): Promise<void> {
-    res.json(
-      await BookingQueries.byIdFor(req.params.id, req.auth?.sub, req.auth?.permissions ?? []),
-    );
+    const booking = await BookingQueries.byIdFor(req.params.id, req.auth?.sub, req.auth?.permissions ?? []);
+    res.json({ ...booking.toJSON(), reservation: await BookingQueries.reservationOf(booking) });
   }
 
   /** POST /api/bookings/:id/cancel — UC-G14 */

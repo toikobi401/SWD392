@@ -27,3 +27,35 @@ export function hotelToday(now: Date = new Date()): Date {
 export function addDays(date: Date, n: number): Date {
   return new Date(date.getTime() + n * DAY_MS);
 }
+
+/** The hotel's calendar date of an instant, as `YYYY-MM-DD`. */
+export function hotelDateOf(instant: Date): string {
+  return hotelToday(instant).toISOString().slice(0, 10);
+}
+
+/**
+ * The instant a hotel calendar day begins. A promotion "valid until 31 Dec"
+ * must end at midnight in Hanoi (17:00 UTC), not at midnight UTC seven hours
+ * later — so validity windows are hotel days, not UTC days.
+ */
+export function hotelDayStart(ymd: string): Date {
+  const utcMidnight = new Date(`${ymd}T00:00:00Z`);
+  // sv-SE formats as "YYYY-MM-DD HH:mm:ss": the hotel's wall clock at UTC midnight.
+  const wall = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: HOTEL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(utcMidnight);
+  const offset = new Date(`${wall.replace(' ', 'T')}Z`).getTime() - utcMidnight.getTime();
+  return new Date(utcMidnight.getTime() - offset);
+}
+
+/** The last millisecond of a hotel calendar day. */
+export function hotelDayEnd(ymd: string): Date {
+  return new Date(hotelDayStart(ymd).getTime() + DAY_MS - 1);
+}

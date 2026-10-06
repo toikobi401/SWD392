@@ -14,7 +14,6 @@ import {
   Booking,
   IBooking,
   RoomType,
-  Promotion,
   Service,
   InventoryHold,
 } from '../models/booking.model';
@@ -27,23 +26,41 @@ import {
 } from '../models/enums';
 import { RefundRequest, Payment } from '../models/billing.model';
 import { AvailabilityCalculator, HOLD_DURATION_MS } from '../rules/availability.calculator';
-import { PricingRule, AddOnSelection } from '../rules/pricing.rule';
+import { PricingRule, AddOnSelection, TAX_RATE } from '../rules/pricing.rule';
 import { CancellationPolicyRule } from '../rules/cancellation-policy.rule';
 import { BookingStateMachine } from '../rules/booking-state-machine';
 import { PaymentService } from './payment.service';
+import { PromotionService } from './promotion.service';
 import { NotificationProxy } from '../proxies/notification.proxy';
 import { AuditService } from './audit.service';
 import { AppError } from '../utils/app-error';
 
-export interface BookRoomCommand {
+/** One room the guest wants, with who will sleep in it. */
+export interface RoomRequest {
   roomTypeId: string;
-  checkInDate: Date;
-  checkOutDate: Date;
   adults: number;
   children?: number;
+  /** Who stays in this room if not the booker (checked at check-in). */
+  occupantName?: string;
+  addOnServices?: { serviceId: string; quantity: number }[];
+}
+
+export interface BookRoomCommand {
+  /** The rooms to book — any mix of types, all for the same dates. */
+  rooms?: RoomRequest[];
+  /**
+   * Single-room shorthand, kept for older clients: one room of `roomTypeId`
+   * (or `roomCount` of them, with the party split between them).
+   */
+  roomTypeId?: string;
+  adults?: number;
+  children?: number;
   roomCount?: number;
-  guest: { fullName: string; email: string; phone: string; specialRequest?: string };
   addOnServiceIds?: { serviceId: string; quantity: number }[];
+
+  checkInDate: Date;
+  checkOutDate: Date;
+  guest: { fullName: string; email: string; phone: string; specialRequest?: string };
   voucherCode?: string;
   paymentMethod: PaymentMethod;
   /** Present when a logged-in Customer books (UC-G07 alternative flow 1.2). */
@@ -51,11 +68,19 @@ export interface BookRoomCommand {
 }
 
 export interface BookRoomResult {
+  reservationCode: string;
+  /** One booking per room, in the order they were requested. */
+  bookings: IBooking[];
+  /** The first room — for callers that book a single room. */
   booking: IBooking;
+  total: number;
   paymentUrl?: string;
-  /** True when the gateway has not yet confirmed — the booking stays PENDING. */
+  /** True while payOS has not confirmed — the bookings stay PENDING. */
   paymentPending?: boolean;
 }
+
+/** BR-08 — at most five rooms in one reservation. */
+export const MAX_ROOMS_PER_RESERVATION = 5;
 
 /** Methods a guest can use without a cashier present. */
 export const ONLINE_PAYMENT_METHODS: PaymentMethod[] = [
@@ -66,32 +91,37 @@ export const ONLINE_PAYMENT_METHODS: PaymentMethod[] = [
 
 export class BookingCoordinator {
   /**
-   * UC-G07 Normal Flow 1.0.
+   * UC-G07 Normal Flow 1.0 — books one or more rooms in a single reservation.
    *
-   * The ordering matters: inventory is held BEFORE payment so that a guest who
-   * is paying cannot lose the room (step 2); the booking is recorded PENDING
-   * before the charge so the payment always references it; and the inventory
-   * is only committed AFTER the money is captured (step 11). If payment fails
-   * the booking goes PENDING → CANCELLED and the hold is released — UC-G07
-   * exception 1.0.E3.
+   * Every room becomes its own Booking with its own lifecycle (the rooms of a
+   * family may arrive at different times, and one can be cancelled without
+   * the others), sharing a reservation code, the dates and ONE payOS payment.
+   *
+   * The ordering matters:
+   *   1. every room is held BEFORE any money moves (step 2) — all or nothing:
+   *      if the third room cannot be held, the first two are released;
+   *   2. the bookings are recorded PENDING before the charge, so each payment
+   *      references its room;
+   *   3. inventory is committed only when payOS confirms the money
+   *      (PaymentService.confirmFromGateway). If payment fails, every room
+   *      goes PENDING → CANCELLED and its hold is released (exception 1.0.E3).
    */
   static async bookRoom(command: BookRoomCommand): Promise<BookRoomResult> {
-    const {
-      roomTypeId,
-      checkInDate,
-      checkOutDate,
-      adults,
-      children = 0,
-      roomCount = 1,
-    } = command;
+    const { checkInDate, checkOutDate } = command;
+    const rooms = this.normalizeRooms(command);
+
+    // BR-08.
+    if (rooms.length === 0) throw new AppError('NO_ROOMS', 'Choose at least one room', 400);
+    if (rooms.length > MAX_ROOMS_PER_RESERVATION) {
+      throw new AppError(
+        'TOO_MANY_ROOMS',
+        `At most ${MAX_ROOMS_PER_RESERVATION} rooms can be booked together — for a group, please contact the hotel`,
+        400,
+      );
+    }
 
     // Step 4 of UC-G01 — the same date validation guards the booking entry point.
     this.validateDates(checkInDate, checkOutDate);
-
-    const roomType = await RoomType.findById(roomTypeId);
-    if (!roomType || !roomType.isActive) {
-      throw new AppError('ROOM_TYPE_NOT_FOUND', 'Room type not found', 404);
-    }
 
     // An online guest cannot pay cash — there is no cashier on the other end
     // (BR-31). "Pay at hotel" is UC-G07 alternative flow 1.1, not a cash charge.
@@ -103,145 +133,186 @@ export class BookingCoordinator {
       );
     }
 
-    // BR-13 — occupancy may not exceed the room type capacity.
-    if (adults + children > roomType.capacity * roomCount) {
-      throw new AppError(
-        'CAPACITY_EXCEEDED',
-        `This room type accommodates at most ${roomType.capacity} guests per room`,
-        400,
-      );
+    const typeIds = [...new Set(rooms.map((r) => r.roomTypeId))];
+    const types = await RoomType.find({ _id: { $in: typeIds }, isActive: true });
+    const typeOf = (id: string) => types.find((t) => String(t._id) === id);
+
+    rooms.forEach((r, i) => {
+      const rt = typeOf(r.roomTypeId);
+      if (!rt) throw new AppError('ROOM_TYPE_NOT_FOUND', `Room ${i + 1}: room type not found`, 404);
+      // BR-13 — each room's occupancy may not exceed its capacity.
+      if (r.adults < 1) throw new AppError('ADULT_REQUIRED', `Room ${i + 1} needs at least one adult`, 400);
+      if (r.adults + (r.children ?? 0) > rt.capacity) {
+        throw new AppError(
+          'CAPACITY_EXCEEDED',
+          `Room ${i + 1} (${rt.name}) sleeps at most ${rt.capacity}`,
+          400,
+        );
+      }
+    });
+
+    // Step 8 — reject an unknown, inactive, expired or used-up voucher before
+    // anything is held. Its minimum spend is checked once the rooms are priced.
+    const promotion = command.voucherCode
+      ? await PromotionService.resolve(command.voucherCode, Infinity)
+      : null;
+
+    // Step 2 — hold every room for 15 minutes, all or nothing. Holds are
+    // placed one room at a time so each one counts the holds before it.
+    const holdIds: string[] = [];
+    const releaseAll = () => Promise.all(holdIds.map((h) => AvailabilityCalculator.releaseHold(h)));
+    for (const r of rooms) {
+      const holdId = await AvailabilityCalculator.hold(r.roomTypeId, checkInDate, checkOutDate, 1);
+      if (!holdId) {
+        await releaseAll();
+        const wanted = rooms.filter((x) => x.roomTypeId === r.roomTypeId).length;
+        const left = (await AvailabilityCalculator.forRoomType(r.roomTypeId, checkInDate, checkOutDate)).availableCount;
+        // UC-G07 exception 1.0.E1 — availability lost during the flow.
+        throw new AppError(
+          'NO_AVAILABILITY',
+          `Only ${left} ${typeOf(r.roomTypeId)!.name} room${left === 1 ? '' : 's'} left for these dates — you asked for ${wanted}`,
+          409,
+        );
+      }
+      holdIds.push(holdId);
     }
 
-    // Step 2 — re-verify availability and hold the inventory for 15 minutes.
-    const holdId = await AvailabilityCalculator.hold(
-      roomTypeId,
-      checkInDate,
-      checkOutDate,
-      roomCount,
-    );
-    if (!holdId) {
-      // UC-G07 exception 1.0.E1 — availability lost during the flow.
-      throw new AppError(
-        'NO_AVAILABILITY',
-        'This room is no longer available for the selected dates',
-        409,
-      );
-    }
-
+    let bookings: IBooking[] = [];
     try {
-      // Steps 5–6 — resolve add-on services at their current price.
-      const addOns = await this.resolveAddOns(command.addOnServiceIds);
-
-      // Step 8 — validate the voucher before it is priced in.
-      const promotion = await this.resolveVoucher(command.voucherCode);
-
-      // Step 7 — «application logic» PricingRule computes the breakdown.
-      const price = PricingRule.calculate(
-        roomType,
-        checkInDate,
-        checkOutDate,
-        roomCount,
-        addOns,
-        promotion,
-      );
-
-      // Step 9 — record the booking as PENDING *before* taking money, so every
-      // payment has a booking to reconcile against. If the gateway times out,
-      // the webhook later finds this booking and confirms it (UC-G10 alt. 1.3).
-      const booking = await Booking.create({
-        bookingCode: this.generateBookingCode(),
-        customerId: command.customerId,
-        guest: command.guest,
-        roomTypeId,
-        checkInDate,
-        checkOutDate,
-        adults,
-        children,
-        status: BookingStatus.PENDING,
-        addOnServices: addOns.map((a) => ({
-          serviceId: a.serviceId,
-          quantity: a.quantity,
-          price: a.unitPrice,
-        })),
-        promotionId: promotion?._id,
-        subtotal: price.subtotal,
-        discount: price.discount,
-        tax: price.tax,
-        totalAmount: price.total,
+      // Steps 5–7 — price each room, then spread the voucher across the rooms
+      // in proportion to their price (the last room takes the rounding).
+      const lines = [];
+      for (const r of rooms) {
+        const addOns = await this.resolveAddOns(r.addOnServices);
+        const price = PricingRule.calculate(typeOf(r.roomTypeId)!, checkInDate, checkOutDate, 1, addOns);
+        lines.push({ room: r, addOns, subtotal: price.subtotal });
+      }
+      const grossTotal = lines.reduce((sum, l) => sum + l.subtotal, 0);
+      // BR-56 — minimum spend is the whole reservation's, before tax. A
+      // failure here releases the holds (catch below).
+      if (promotion) await PromotionService.resolve(promotion.code, grossTotal);
+      const discountTotal = promotion ? PricingRule.discountFor(promotion, grossTotal) : 0;
+      let discountLeft = discountTotal;
+      const priced = lines.map((l, i) => {
+        const discount =
+          i === lines.length - 1 ? discountLeft : Math.floor((discountTotal * l.subtotal) / grossTotal);
+        discountLeft -= discount;
+        const tax = Math.round((l.subtotal - discount) * TAX_RATE);
+        return { ...l, discount, tax, total: l.subtotal - discount + tax };
       });
 
-      // «include» UC-G10 Pay for Booking.
-      let payment;
+      // Step 9 — record every room PENDING before taking money.
+      const reservationCode = this.generateBookingCode();
+      bookings = await Booking.create(
+        priced.map((l, i) => ({
+          bookingCode: rooms.length === 1 ? reservationCode : `${reservationCode}-${i + 1}`,
+          reservationCode,
+          customerId: command.customerId,
+          guest: command.guest,
+          occupantName: l.room.occupantName,
+          roomTypeId: l.room.roomTypeId,
+          checkInDate,
+          checkOutDate,
+          adults: l.room.adults,
+          children: l.room.children ?? 0,
+          status: BookingStatus.PENDING,
+          addOnServices: l.addOns.map((a) => ({ serviceId: a.serviceId, quantity: a.quantity, price: a.unitPrice })),
+          promotionId: promotion?._id,
+          subtotal: l.subtotal,
+          discount: l.discount,
+          tax: l.tax,
+          totalAmount: l.total,
+        })),
+      );
+
+      await Promise.all(
+        bookings.map((b) =>
+          AuditService.record({
+            action: 'BOOKING_CREATED',
+            entityType: 'Booking',
+            entityId: String(b._id),
+            actorId: command.customerId,
+            after: { bookingCode: b.bookingCode, reservationCode, total: b.totalAmount },
+          }),
+        ),
+      );
+
+      // «include» UC-G10 — ONE payOS link for the whole reservation.
+      let payments;
       try {
-        payment = await PaymentService.charge({
-          amount: price.total,
+        payments = await PaymentService.chargeReservation({
+          lines: bookings.map((b, i) => ({
+            bookingId: String(b._id),
+            amount: b.totalAmount,
+            label: typeOf(rooms[i].roomTypeId)!.name,
+          })),
           method: command.paymentMethod,
-          // The bank memo: the booking code's unique tail, e.g. "HMSAB12C".
-          reference: `HMS${booking.bookingCode.slice(-5)}`,
-          bookingId: String(booking._id),
-          // The payment link closes a minute BEFORE the inventory hold does,
-          // so a guest can never pay for a room we have already released.
+          // The bank memo: the reservation code's unique tail, e.g. "HMSAB12C".
+          reference: `HMS${reservationCode.slice(-5)}`,
+          // The payment link closes a minute BEFORE the holds do, so a guest
+          // can never pay for rooms we have already released.
           expiresAt: new Date(Date.now() + HOLD_DURATION_MS - 60_000),
-          buyer: {
-            name: command.guest.fullName,
-            email: command.guest.email,
-            phone: command.guest.phone,
-          },
+          buyer: { name: command.guest.fullName, email: command.guest.email, phone: command.guest.phone },
         });
       } catch (err) {
-        await this.abandon(booking);
+        await Promise.all(bookings.map((b) => this.abandon(b)));
         throw err;
       }
 
-      if (payment.status === PaymentStatus.FAILED) {
-        // UC-G07 exception 1.0.E3 — PENDING → CANCELLED (§6.4).
-        await this.abandon(booking);
-        throw new AppError('PAYMENT_DECLINED', 'Payment was declined', 402);
+      if (payments.some((p) => p.status === PaymentStatus.FAILED)) {
+        // UC-G07 exception 1.0.E3 — every room PENDING → CANCELLED (§6.4).
+        await Promise.all(bookings.map((b) => this.abandon(b)));
+        throw new AppError('PAYMENT_DECLINED', 'Payment could not be started', 402);
       }
 
-      if (payment.status === PaymentStatus.PENDING) {
-        // The normal payOS path: the guest still has to pay in their banking
-        // app. The hold is kept and linked to the booking; the webhook (or the
-        // reconcile on return) confirms both — UC-G10 alternative flow 1.3.
-        await InventoryHold.findByIdAndUpdate(holdId, { bookingId: booking._id });
-        return { booking, paymentPending: true, paymentUrl: payment.checkoutUrl };
-      }
-
-      // Step 10 — PENDING → CONFIRMED on capture (§6.4).
-      booking.status = BookingStateMachine.next(booking.status, 'PAYMENT_CAPTURED');
-      await booking.save();
-
-      if (promotion) {
-        await Promotion.findByIdAndUpdate(promotion._id, { $inc: { usedCount: 1 } });
-      }
-
-      // Step 11 — commit: the CONFIRMED booking itself now holds the inventory.
-      await AvailabilityCalculator.releaseHold(holdId);
-
-      // Loyalty points are NOT credited here. BR-29 credits them only on a
-      // completed stay (CheckOutCoordinator) — crediting at booking time would
-      // let a guest book, collect points, then cancel.
-
-      // Step 12 — «include» UC-G12 Receive Email / SMS Confirmation.
-      // A delivery failure must not invalidate the booking (exception 1.0.E5).
-      await NotificationProxy.sendBookingConfirmation(booking).catch((err) =>
-        console.error('[UC-G12] confirmation delivery failed, queued for retry', err),
+      // The payOS path: the guest still has to pay in their banking app. Each
+      // hold is linked to its room; the webhook (or the reconcile when the
+      // guest returns) confirms the rooms and deletes the holds together —
+      // UC-G10 alternative flow 1.1. payOS never approves synchronously.
+      await Promise.all(
+        holdIds.map((h, i) => InventoryHold.findByIdAndUpdate(h, { bookingId: bookings[i]._id })),
       );
 
-      await AuditService.record({
-        action: 'BOOKING_CREATED',
-        entityType: 'Booking',
-        entityId: String(booking._id),
-        actorId: command.customerId,
-        after: { bookingCode: booking.bookingCode, total: price.total },
-      });
-
-      return { booking };
+      // Loyalty points are NOT credited here — BR-29 credits them only on a
+      // completed stay (CheckOutCoordinator).
+      return {
+        reservationCode,
+        bookings,
+        booking: bookings[0],
+        total: bookings.reduce((sum, b) => sum + b.totalAmount, 0),
+        paymentPending: true,
+        paymentUrl: payments[0].checkoutUrl,
+      };
     } catch (error) {
-      // Always release the hold on any failure so the room returns to inventory.
-      await AvailabilityCalculator.releaseHold(holdId);
+      // Always release the holds on any failure so the rooms return to inventory.
+      await releaseAll();
       throw error;
     }
+  }
+
+  /** Accepts the multi-room `rooms` list, or the older single-room fields. */
+  private static normalizeRooms(command: BookRoomCommand): RoomRequest[] {
+    if (command.rooms?.length) {
+      return command.rooms.map((r) => ({
+        roomTypeId: String(r.roomTypeId),
+        adults: Number(r.adults),
+        children: Number(r.children ?? 0),
+        occupantName: r.occupantName?.trim() || undefined,
+        addOnServices: r.addOnServices,
+      }));
+    }
+    if (!command.roomTypeId) return [];
+
+    // Older clients: `roomCount` rooms of one type, the party split evenly.
+    const n = Math.max(1, Number(command.roomCount ?? 1));
+    const adults = Number(command.adults ?? 1);
+    const children = Number(command.children ?? 0);
+    return Array.from({ length: n }, (_, i) => ({
+      roomTypeId: String(command.roomTypeId),
+      adults: Math.floor(adults / n) + (i < adults % n ? 1 : 0),
+      children: Math.floor(children / n) + (i < children % n ? 1 : 0),
+      addOnServices: i === 0 ? command.addOnServiceIds : undefined,
+    }));
   }
 
   /**
@@ -394,21 +465,6 @@ export class BookingCoordinator {
       }
       return { serviceId: sel.serviceId, quantity: sel.quantity, unitPrice: service.price };
     });
-  }
-
-  /** UC-G10 exception 1.0.E5 — expired or exhausted voucher. */
-  private static async resolveVoucher(code?: string) {
-    if (!code) return null;
-
-    const promotion = await Promotion.findOne({ code: code.toUpperCase() });
-    if (!promotion || !promotion.isValidOn(new Date())) {
-      throw new AppError(
-        'INVALID_VOUCHER',
-        'This voucher has expired or reached its usage limit',
-        400,
-      );
-    }
-    return promotion;
   }
 
   /** UC-G07 exception 1.0.E3 — a booking whose payment failed: PENDING → CANCELLED. */
