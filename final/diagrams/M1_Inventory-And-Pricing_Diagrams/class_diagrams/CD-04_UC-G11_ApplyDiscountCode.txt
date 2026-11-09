@@ -5,13 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class BookingWizardPage <<boundary>> {
-    + applyCode(code)
+    +applyDiscountCode(code)
 }
 
 class PromotionController <<boundary>> {
-    + validate(req, res)
-    + applicability(promotion, subtotal, now)
-    + discountFor(promotion, subtotal) : Number
+    +validate(req, res)
+    +validateRequest(req)
 }
 
 class Promotion <<entity>> {
@@ -26,7 +25,7 @@ class Promotion <<entity>> {
     - usedCount : Number
     - minimumSpend : Number
     - isActive : Boolean
-    + findOne(filter) : Promotion
+    +findByCode(code) : Promotion
 }
 
 enum DiscountType <<enumeration>> {

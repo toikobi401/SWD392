@@ -21,15 +21,17 @@ Mỗi người: **4 use case**, mỗi use case vẽ **1 class diagram (CD) + 1 s
 
 - [ ] **CD-xx và SD-xx cùng số là cùng một use case**, dùng chung bộ class.
   - Mỗi lifeline trong SD (trừ Actor và DB) phải là một class trong CD.
-  - Mỗi message gọi vào một lifeline phải là một method của class đó trong CD.
-- [ ] **Sequence diagram**: đúng 5 lifeline `Actor – UI page – Controller – Model – DB`, theo mẫu `SD-01`.
-  - Chỉ thêm lifeline khi UC có hệ thống ngoài (payOS, Email service).
+  - Mỗi bước gọi vào một lifeline ứng với một method của class đó trong CD (khớp về ý nghĩa và thứ tự; nhãn SD viết bằng ngôn ngữ nghiệp vụ nên không trùng chữ với tên method).
+- [ ] **Sequence diagram**: 5 lifeline `Actor – UI page – Controller – Model – DB`, theo mẫu `SD-01`.
+  - Chỉ thêm lifeline hệ thống ngoài (payOS, Email service) khi nó nằm trên luồng chính.
   - UC chạm 2 model thì vẽ cả 2 model (VD `User, Role`).
-  - Luồng lỗi vẽ bằng khung `alt` (401/403, 400, 409…), message trả về dùng nét đứt.
+  - **1 luồng chính + 1 luồng thay thế**: đúng 1 khung `alt` 2 nhánh — nhánh trên là luồng thành công, nhánh dưới là lỗi nghiệp vụ chính của UC. Không dùng `opt`/`loop`/`ref`, không lồng khung.
+  - Nhãn message bằng ngôn ngữ nghiệp vụ tiếng Anh, ngắn (VD `get pending refund requests`), không ghi query, field hay danh sách mã lỗi. Message trả về dùng nét đứt.
+  - Controller chỉ có 1 self-call `validate request` (gộp xác thực, phân quyền, kiểm tra dữ liệu); xác thực coi là tiền điều kiện, không vẽ nhánh 401/403.
 - [ ] **Class diagram** (design class diagram cho một UC):
-  - Class: UI page `«boundary»` · Controller `«boundary»` · Model `«entity»` · enum `«enumeration»` mà model dùng.
+  - Class: UI page `<<boundary>>` · Controller `<<boundary>>` · Model `<<entity>>` · enum `<<enumeration>>` mà model dùng — chỉ các class có mặt trong SD cùng số.
   - Model: ghi thuộc tính lấy từ `src/server/src/models/*.model.ts` (đúng tên, kiểu).
-  - Controller: ghi method xử lý UC (cột **Controller method** bên dưới).
+  - Method: chỉ các method ứng với bước còn lại trong SD (Controller: handler + `validateRequest`).
   - Quan hệ: Page ⇢ Controller (dependency, gọi API) · Controller ⇢ Model (dependency) · giữa các Model dùng association có multiplicity.
   - Không vẽ lại toàn bộ subsystem — 9 class diagram subsystem đã có trong `diagrams/class_diagrams/`.
 - [ ] **Định dạng**: mỗi diagram có 2 file cùng tên:
@@ -126,7 +128,7 @@ Cột **Nguồn**:
 | M5 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
 | **Tổng** | **20/20** | **20/20** | **1/7** | |
 
-> Bản nháp 40 diagram do Codex vẽ (09/11/2026), đã đối chiếu cặp CD/SD tự động và chuyển sang `.drawio`. Mỗi thành viên vẫn cần **tự đọc lại** diagram của mình trước khi ghép SDS. Ngoại lệ so với quy ước: SD-03 có 3 entity (Promotion, AuditLog, Booking); SD-10 rất chi tiết, có thể rút gọn nhánh lỗi khi chèn SDS.
+> Bản nháp 40 diagram do Codex vẽ (09/11/2026), đã đối chiếu cặp CD/SD tự động và chuyển sang `.drawio`. Mỗi thành viên vẫn cần **tự đọc lại** diagram của mình trước khi ghép SDS. Đã rút gọn (09/11/2026): mỗi SD còn 11–20 message, 1 luồng chính + 1 luồng thay thế; CD rút gọn theo SD.
 
 ---
 

@@ -5,25 +5,14 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class ApprovalsPage <<boundary>> {
-    + openLeaveApprovals(department)
-    + decideLeave(requestId, approve, note, coverageOverrideJustification)
-    + onError(error)
-    + onSuccess()
+    +loadPendingLeave()
+    +decide(id, approve, note)
 }
 
 class LeaveController <<boundary>> {
-    + pending(req, res)
-    + decide(req, res)
-    + authenticate(req, res, next)
-    + requirePermission(permission)
-    + pendingQueue(department)
-    + decide(command)
-    + validateRejection(note)
-    + buildCoverageContext(request, employee)
-    + evaluate(request, employee, approverId, coverage)
-    + countDays(fromDate, toDate) : Number
-    + applyDecision(request, employee, command, status, grantedDays)
-    + record(entry)
+    +pending(req, res)
+    +decide(req, res)
+    +validateRequest(req)
 }
 
 class LeaveRequest <<entity>> {
@@ -40,15 +29,8 @@ class LeaveRequest <<entity>> {
     - decisionNote : String
     - coverageOverrideJustification : String
     - createdAt : Date
-    + find(filter) : Query
-    + populate(path, fields) : Query
-    + sort(order) : LeaveRequest[]
-    + findById(id) : LeaveRequest
-    + save() : LeaveRequest
-}
-
-class EmailService <<external>> {
-    + sendDecisionNotice(to, subject, body)
+    +getPending(department) : LeaveRequest[]
+    +approve(id) : LeaveRequest
 }
 
 enum LeaveType <<enumeration>> {
@@ -68,7 +50,6 @@ enum LeaveStatus <<enumeration>> {
 
 ApprovalsPage ..> LeaveController : GET /api/leave-requests/pending\nPATCH /api/leave-requests/:id/decision
 LeaveController ..> LeaveRequest
-LeaveController ..> EmailService : outcome notification
 LeaveRequest --> LeaveType
 LeaveRequest --> LeaveStatus
 

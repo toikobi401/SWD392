@@ -5,12 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class "BookingDetailPage" as UI <<boundary>> {
-    + setConfirming(value)
-    + cancel.mutate(reason)
+    +cancelBooking(bookingId)
 }
 
 class "BookingController" as C <<boundary>> {
-    + cancel(req, res)
+    +cancel(req, res)
+    +validateRequest(req)
 }
 
 class "Booking" as B <<entity>> {
@@ -25,8 +25,8 @@ class "Booking" as B <<entity>> {
     - nonRefundable : Boolean
     - cancelledAt : Date
     - cancellationReason : String
-    + findById(id) : Booking
-    + save() : Booking
+    +getBooking(id) : Booking
+    +cancel(id) : Booking
 }
 
 enum BookingStatus <<enumeration>> {
@@ -37,13 +37,6 @@ enum BookingStatus <<enumeration>> {
     CANCELLED
     NO_SHOW
 }
-
-class "EmailService" as E <<external>> {
-    + send(message)
-}
-
-C ..> E : POST /send
-
 
 UI ..> C : POST /api/bookings/:id/cancel
 C ..> B

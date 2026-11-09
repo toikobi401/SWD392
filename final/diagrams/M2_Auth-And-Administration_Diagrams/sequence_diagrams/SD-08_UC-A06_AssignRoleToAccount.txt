@@ -7,119 +7,45 @@ boundary "AccountController" as C
 entity "User" as U
 entity "Role" as R
 database "MongoDB" as DB
-participant "Email service" as E
 
-
-A -> UI : assignRole(id, roleId) - select a role and click Add
+A -> UI : choose account and role
 activate A
 activate UI
-UI -> C : POST /api/accounts/:id/roles (roleId, expiresAt?, reason?)\nassignRole(req, res)
+UI -> C : submit role assignment
 activate C
-C -> C : authenticate(req, res, next)
-alt missing bearer token
-    C --> UI : 401 UNAUTHORIZED
-    UI --> A : show authentication error
-else expired or invalid bearer token
-    C --> UI : 401 TOKEN_EXPIRED / INVALID_TOKEN
-    UI --> A : refresh session or show authentication error
-else valid token
-    C -> C : requirePermission(MANAGE_ROLES)
-    alt permission missing
-        C --> UI : 403 FORBIDDEN
-        UI --> A : show missing permission error
-    else authorized
-        C -> U : findById(userId).populate('roles')
-        activate U
-        U -> DB : query target user and referenced roles
-        activate DB
-        DB --> U : target document with roles or null
-        deactivate DB
-        U --> C : target user or null
-        deactivate U
-
-        C -> R : findById(roleId)
-        activate R
-        R -> DB : query role by _id
-        activate DB
-        DB --> R : role document or null
-        deactivate DB
-        R --> C : role or null
-        deactivate R
-
-        C -> U : findById(actorId).populate('roles')
-        activate U
-        U -> DB : query acting administrator and referenced roles
-        activate DB
-        DB --> U : actor document with roles or null
-        deactivate DB
-        U --> C : actor or null
-        deactivate U
-
-        alt target account, role or acting administrator not found
-            C --> UI : 404 NOT_FOUND
-            UI --> A : show which resource was not found
-        else target status is not ACTIVE
-            C --> UI : 409 ACCOUNT_INACTIVE
-            UI --> A : require account reactivation
-        else target already holds roleId
-            C --> UI : 409 ALREADY_ASSIGNED
-            UI --> A : "This account already holds that role"
-        else candidate assignment
-            C -> C : assertNoPrivilegeEscalation(actor, role, actorId)
-            alt granting SUPER_ADMIN without being SUPER_ADMIN
-                C -> C : record(PRIVILEGE_ESCALATION_BLOCKED)
-                C --> UI : 403 PRIVILEGE_ESCALATION
-                UI --> A : show authority error
-            else permitted authority
-                C -> C : assertNoSegregationConflict(current, role)
-                alt resulting roles include both ADMIN and MANAGER
-                    C --> UI : 409 SEGREGATION_OF_DUTIES
-                    UI --> A : show conflicting roles
-                else assignment allowed
-                    C -> U : save()
-                    activate U
-                    U -> DB : persist updated roles array
-                    activate DB
-                    DB --> U : saved document
-                    deactivate DB
-                    U --> C : saved user
-                    deactivate U
-
-                    C -> U : findByIdAndUpdate(userId, { $set: { sessionsInvalidatedAt: now } })
-                    activate U
-                    U -> DB : request session invalidation timestamp update
-                    activate DB
-                    DB --> U : update result
-                    deactivate DB
-                    U --> C : result ignored
-                    deactivate U
-
-                    opt expiresAt or reason supplied through the API
-                    end
-                    C -> C : record(ROLE_ASSIGNED)
-                    C -> E : sendDecisionNotice(email, subject, body)
-                    activate E
-                    E --> C : accepted or delivery error (ignored)
-                    deactivate E
-
-                    C -> U : findById(userId).populate('roles')
-                    activate U
-                    U -> DB : reload user and role permissions
-                    activate DB
-                    DB --> U : user with populated roles
-                    deactivate DB
-                    U --> C : user with roles
-                    deactivate U
-                    C --> UI : 200 OK (id, roles, effectivePermissions)
-                    UI --> A : clear role selection and refresh accounts
-                end
-            end
-        end
-    end
+C -> C : validate request
+C -> U : get account
+activate U
+U -> DB : find user
+activate DB
+DB --> U : user data
+deactivate DB
+U --> C : account
+deactivate U
+C -> R : get role
+activate R
+R -> DB : find role
+activate DB
+DB --> R : role data
+deactivate DB
+R --> C : role
+deactivate R
+alt role can be assigned
+C -> U : add role to account
+activate U
+U -> DB : save user
+activate DB
+DB --> U : user saved
+deactivate DB
+U --> C : updated account
+deactivate U
+C --> UI : role assigned
+UI --> A : show updated roles
+else role conflicts with current roles
+C --> UI : role conflict
+UI --> A : show error message
 end
-
 deactivate C
 deactivate UI
 deactivate A
-
 @enduml

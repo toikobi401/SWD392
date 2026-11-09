@@ -8,156 +8,41 @@ entity "Payment" as P
 database "MongoDB" as DB
 participant "payOS" as X
 
-
-G -> X : scan VietQR and transfer the reservation total
+G -> X : pay on payOS checkout
 activate G
 activate X
-X --> G : bank transfer submitted
-deactivate X
-deactivate G
-
-X -> C : POST /api/payments/payos/webhook (body)\nwebhook(req, res)
-activate X
+X -> C : payment result webhook
 activate C
-C -> C : verifyWebhook(body)
-alt missing data or signature / invalid HMAC
-    C --> X : 400 INVALID_WEBHOOK / INVALID_SIGNATURE
-else valid signed payload
-    C -> C : confirmFromGateway(orderCode, approved, reference, amount)
-    C -> P : find({gatewayOrderCode}).sort({_id: 1})
-    activate P
-    P -> DB : query all room payments for this link
-    activate DB
-    DB --> P : payments
-    deactivate DB
-    P --> C : payments
-    deactivate P
-    alt unknown order (including registration sample)
-        C --> X : 200 OK (success=true, applied=false)
-    else no PENDING payments (duplicate callback)
-        C --> X : 200 OK (success=true, applied=true)
-    else approved but amount differs from sum of payments
-        C -> C : record(PAYMENT_AMOUNT_MISMATCH)
-        C --> X : 200 OK (success=true, applied=true; no settlement)
-    else amount matches or data.code is not "00"
-        loop each PENDING payment
-            C -> P : findOneAndUpdate({_id, status:PENDING}, {$set: outcome}, {new:true})
-            activate P
-            P -> DB : atomic PENDING -> PAID or FAILED
-            activate DB
-            DB --> P : updated payment or null
-            deactivate DB
-            P --> C : updated payment or null
-            deactivate P
-            opt updated payment is PAID
-                C -> C : record(PAYMENT_CAPTURED)
-            end
-        end
-        C -> C : confirmFromGateway(outcome)\nconfirm or cancel won bookings; release inventory holds
-        opt approved outcome
-            C -> C : sendConfirmationOnce(orderCode)
-            C -> P : find({gatewayOrderCode}).sort({_id: 1})
-            activate P
-            P -> DB : query reservation payment statuses
-            activate DB
-            DB --> P : payments
-            deactivate DB
-            P --> C : payments
-            deactivate P
-            opt all payments are PAID
-                C -> P : findOneAndUpdate({_id:firstId, notifiedAt:{$exists:false}}, {$set:{notifiedAt:now}})
-                activate P
-                P -> DB : claim confirmation once
-                activate DB
-                DB --> P : claimed payment or null
-                deactivate DB
-                P --> C : claimed payment or null
-                deactivate P
-                opt claim won
-                    C -> C : sendConfirmationOnce(orderCode)\ncount voucher use; delegate UC-G12 email confirmation
-                end
-            end
-        end
-        opt no transition won (concurrent reconciliation)
-            C -> P : findById(firstId)
-            activate P
-            P -> DB : read payment settled by concurrent caller
-            activate DB
-            DB --> P : current payment
-            deactivate DB
-            P --> C : current payment
-            deactivate P
-        end
-        C --> X : 200 OK (success=true, applied=true)
-    end
-end
-deactivate C
+C -> C : validate request
+C -> P : update payment status
+activate P
+P -> DB : save payment
+activate DB
+DB --> P : payment saved
+deactivate DB
+P --> C : payment
+deactivate P
+C --> X : webhook received
+X --> UI : redirect to result page
 deactivate X
-
-G -> UI : check() after return or cancellation redirect
-activate G
+UI -> C : get payment result
 activate UI
-loop while PENDING; every 3000 ms; at most 40 attempts
-    UI -> C : GET /api/payments/payos/:orderCode/reconcile\nreconcile(req, res)
-    activate C
-    C -> C : reconcile(req, res)\nvalidate positive safe integer; ignore URL status
-    alt invalid orderCode
-        C --> UI : 400 INVALID_ORDER_CODE
-        UI --> G : show error; stop polling
-    else valid orderCode
-        C -> P : find({gatewayOrderCode}).sort({_id: 1})
-        activate P
-        P -> DB : query payments
-        activate DB
-        DB --> P : payments
-        deactivate DB
-        P --> C : payments
-        deactivate P
-        alt no payments
-            C --> UI : 404 NOT_FOUND
-            UI --> G : show error; stop polling
-        else payments exist
-            opt at least one payment is PENDING
-                C -> X : getStatus(orderCode)\nGET /v2/payment-requests/:orderCode
-                activate X
-                X --> C : link status, amountPaid, reference or gateway error
-                deactivate X
-                alt status lookup failed
-                    C --> UI : 504 GATEWAY_TIMEOUT / 502 GATEWAY_ERROR / 500 CONFIG_ERROR
-                    UI --> G : show error; stop polling
-                else PAID / CANCELLED / EXPIRED / FAILED
-                    C -> C : confirmFromGateway(outcome)
-                    ref over C, P
-                        Same guarded settlement as the webhook above:
-                        validate total; atomic transition; apply won side effects once.
-                        PAID confirms; CANCELLED / EXPIRED / FAILED cancels.
-                    end ref
-                else PENDING / PROCESSING / UNDERPAID
-                end
-            end
-            opt no gateway error
-                C -> P : find({gatewayOrderCode}).sort({_id: 1})
-                activate P
-                P -> DB : read fresh payment statuses
-                activate DB
-                DB --> P : payments
-                deactivate DB
-                P --> C : payments
-                deactivate P
-                C -> C : reconcile(req, res)\nread booking codes/statuses; aggregate reservation paymentStatus
-                C --> UI : 200 OK (orderCode, paymentStatus, gatewayStatus,\nreservationCode, bookingStatus, bookingCode, rooms)
-                alt paymentStatus is PAID
-                    UI --> G : show booking confirmed; stop polling
-                else paymentStatus is FAILED
-                    UI --> G : show cancelled or not completed; stop polling
-                else still PENDING
-                    UI --> G : show waiting; after 40 attempts show reference and stop
-                end
-            end
-        end
-    end
-    deactivate C
+C -> P : get payment
+activate P
+P -> DB : find payment
+activate DB
+DB --> P : payment data
+deactivate DB
+P --> C : payment
+deactivate P
+alt payment is PAID
+C --> UI : payment confirmed
+UI --> G : show booking confirmation
+else payment failed or cancelled
+C --> UI : payment not completed
+UI --> G : show failure and retry option
 end
 deactivate UI
+deactivate C
 deactivate G
 @enduml

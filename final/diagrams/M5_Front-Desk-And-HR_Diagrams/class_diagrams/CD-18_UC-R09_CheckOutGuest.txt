@@ -5,17 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class StaffBookingPage <<boundary>> {
-    + submitCheckOut(lateCheckoutSurcharge, waiveSurcharge)
+    +checkOut(bookingId)
 }
 
 class FrontDeskController <<boundary>> {
-    + checkOut(req, res)
-    + authenticate(req, res, next)
-    + requirePermission(permission)
-    + validateBody(rules)
-    + checkOut(command)
-    + post(folioId, line, postedBy)
-    + record(entry)
+    +checkOut(req, res)
+    +validateRequest(req)
 }
 
 class Folio <<entity>> {
@@ -27,17 +22,15 @@ class Folio <<entity>> {
     - balance : Number
     - depositHeld : Number
     - closedAt : Date
-    + findOne(filter) : Folio
-    + findByIdAndUpdate(id, update) : Folio
-    + findById(id) : Folio
-    + updateOne(filter, update) : UpdateResult
+    +getFolio(bookingId) : Folio
+    +close(id) : Folio
 }
 
 class Room <<entity>> {
     - _id : ObjectId
     - status : RoomStatus
     - version : Number
-    + findByIdAndUpdate(id, update, options) : Room
+    +release(roomId) : Room
 }
 
 enum FolioStatus <<enumeration>> {

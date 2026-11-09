@@ -6,147 +6,41 @@ boundary "ApprovalsPage" as UI
 boundary "LeaveController" as C
 entity "LeaveRequest" as L
 database "MongoDB" as DB
-participant "EmailService" as E
 
-
-A -> UI : openLeaveApprovals(department)
+A -> UI : open pending leave requests
 activate A
 activate UI
-UI -> C : GET /api/leave-requests/pending?department=...\npending(req, res)
+UI -> C : request pending leave requests
 activate C
-C -> C : authenticate(req, res, next)
-C -> C : requirePermission(APPROVE_LEAVE)
-alt authentication or permission failure
-    C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN or 403 FORBIDDEN
-    UI --> A : show access error
-else department is empty
-    C --> UI : 400 MISSING_DEPARTMENT
-    UI --> A : show department required error
-else authorized and department supplied
-    C -> C : pendingQueue(department)
-    C -> L : find({employeeId: {$in: staffIds}, status: PENDING})\n.populate('employeeId', 'fullName position department leaveBalance')\n.sort({createdAt: 1})
-    activate L
-    L -> DB : query pending requests and populate employee references
-    activate DB
-    DB --> L : requests with employee details
-    deactivate DB
-    L --> C : requests
-    deactivate L
-    C --> UI : 200 OK ({requests, count})
-    alt queue empty
-        UI --> A : no leave waiting for you
-    else requests found
-        UI --> A : show dates, reason, days, employee and remaining balance
-    end
+C -> L : get pending requests
+activate L
+L -> DB : find pending requests
+activate DB
+DB --> L : requests
+deactivate DB
+L --> C : pending requests
+deactivate L
+C --> UI : pending leave list
+UI --> A : show pending list
+A -> UI : approve request
+UI -> C : submit decision
+C -> C : validate request
+alt employee has enough leave balance
+C -> L : approve leave request
+activate L
+L -> DB : save decision
+activate DB
+DB --> L : decision saved
+deactivate DB
+L --> C : updated request
+deactivate L
+C --> UI : request approved
+UI --> A : update pending list
+else not enough leave balance
+C --> UI : insufficient leave balance
+UI --> A : show warning
 end
 deactivate C
 deactivate UI
 deactivate A
-
-loop decision attempt; retry with justification after coverage warning
-    A -> UI : decideLeave(requestId, approve, note, coverageOverrideJustification)
-    activate A
-    activate UI
-    UI -> C : PATCH /api/leave-requests/:id/decision\ndecide(req, res): approve, note, coverageOverrideJustification, partialToDate?
-    activate C
-    C -> C : authenticate(req, res, next)
-    C -> C : requirePermission(APPROVE_LEAVE)
-    alt authentication or permission failure
-        C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN or 403 FORBIDDEN
-        UI --> A : show access error
-    else authorized
-        C -> L : findById(requestId)
-        activate L
-        L -> DB : query leave request by _id
-        activate DB
-        DB --> L : request document or null
-        deactivate DB
-        L --> C : request or null
-        deactivate L
-        alt request not found
-            C --> UI : 404 NOT_FOUND
-            UI --> A : show missing request error
-        else status != PENDING (cancelled, decided or escalated before read)
-            C --> UI : 409 ALREADY_DECIDED
-            UI --> A : show current state; reopen queue
-        else pending request
-            C -> C : decide(command)
-            alt employee not found
-                C --> UI : 404 NOT_FOUND
-                UI --> A : show missing employee error
-            else employee exists
-                alt approve == false and rejection note is blank
-                    C -> C : validateRejection(note)
-                    C --> UI : 500 INTERNAL_ERROR (plain Error from rejection rule)
-                    UI --> A : show error (normal UI disables Reject without a note)
-                else rejection or approval can be evaluated
-                    alt approve == false
-                        C -> C : validateRejection(note)
-                    else approve == true
-                        C -> C : buildCoverageContext(request, employee)
-                        C -> C : evaluate(request, employee, approverId, coverage)
-                    end
-                    alt approval of own request
-                        C --> UI : 403 FORBIDDEN
-                        UI --> A : show self-approval blocked
-                    else approval has coverageWarning and no override justification
-                        C --> UI : 409 COVERAGE_OVERRIDE_REQUIRED (details.requiresOverride = true)
-                        UI -> UI : onError(error)
-                        UI --> A : show staffing warning; require justification before retry
-                    else approval requires escalation (requested days > 10)
-                        C -> L : save()
-                        activate L
-                        L -> DB : set status = ESCALATED and decisionNote
-                        activate DB
-                        DB --> L : saved request
-                        deactivate DB
-                        L --> C : request
-                        deactivate L
-                        C --> UI : 200 OK (id, status = ESCALATED, days, decidedAt absent)
-                        UI -> UI : onSuccess()
-                        UI --> A : refresh pending queue; escalated request leaves queue
-                    else apply approval or valid rejection
-                        opt approval with partialToDate earlier than current toDate
-                            C -> C : countDays(fromDate, partialToDate)
-                        end
-                        C -> C : applyDecision(request, employee, command, status, grantedDays)
-                        C -> L : save()
-                        activate L
-                        alt schema validation or self-decision pre-save hook fails
-                            L --> C : ValidationError or plain Error
-                            C --> UI : 400 VALIDATION_ERROR or 500 INTERNAL_ERROR
-                            UI --> A : show error (self-rejection fails the schema hook)
-                        else save succeeds
-                            L -> DB : persist APPROVED/REJECTED, approverId, decidedAt,\ndecisionNote, coverageOverrideJustification, dates and days
-                            activate DB
-                            DB --> L : saved request
-                            deactivate DB
-                            L --> C : request
-                            opt status == APPROVED
-                                C -> C : applyDecision(request, employee, command, status, grantedDays)
-                            end
-                            C -> E : sendDecisionNotice(employee.email, subject, body)
-                            activate E
-                            alt email provider succeeds
-                                E --> C : sent
-                            else email provider fails
-                                E --> C : rejected promise (caught and ignored)
-                            end
-                            deactivate E
-                            C -> C : record(LEAVE_APPROVED or LEAVE_REJECTED)
-                            C --> UI : 200 OK (id, status, days, decidedAt)
-                            UI -> UI : onSuccess()
-                            UI --> A : refresh pending queue
-                        end
-                        deactivate L
-                    end
-                end
-            end
-        end
-    end
-    deactivate C
-    deactivate UI
-    deactivate A
-end
-
 @enduml

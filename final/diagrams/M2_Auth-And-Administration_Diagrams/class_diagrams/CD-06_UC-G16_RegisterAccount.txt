@@ -5,17 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class RegisterPage <<boundary>> {
-    + submit(e)
-    + verify(token)
+    +register(form)
 }
 
 class AuthController <<boundary>> {
-    + register(req, res)
-    + verifyEmail(req, res)
-    + validateBody(rules)
-    + assertPasswordStrength(password)
-    + signVerificationToken(userId) : String
-    + record(entry)
+    +register(req, res)
+    +validateRequest(req)
 }
 
 class User <<entity>> {
@@ -28,13 +23,12 @@ class User <<entity>> {
     - roles : ObjectId[]
     - emailVerifiedAt : Date
     - userType : String
-    + findOne(filter) : Query<User>
-    + create(fields) : Promise<User>
-    + findByIdAndUpdate(id, update) : Query<User>
+    +emailExists(email) : Boolean
+    +createAccount(data) : User
 }
 
 class EmailService <<external>> {
-    + sendVerificationLink(to, token)
+    +sendVerificationEmail(to, link)
 }
 
 enum AccountStatus <<enumeration>> {
@@ -48,8 +42,5 @@ RegisterPage ..> AuthController : POST /api/auth/register\nGET /api/auth/verify?
 AuthController ..> User
 AuthController ..> EmailService : verification link
 User --> AccountStatus : status
-
-
-
 
 @enduml

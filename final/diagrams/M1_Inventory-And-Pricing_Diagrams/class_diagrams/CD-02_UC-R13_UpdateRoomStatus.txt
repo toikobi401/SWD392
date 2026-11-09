@@ -5,14 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class RoomRackPage <<boundary>> {
-    + onAction(event, notes)
+    +changeStatus(roomId, status)
 }
 
 class FrontDeskController <<boundary>> {
-    + updateRoomStatus(req, res)
-    + authenticate(req)
-    + requirePermission(permission)
-    + next(current, event) : RoomStatus
+    +updateRoomStatus(req, res)
+    +validateRequest(req)
 }
 
 class Room <<entity>> {
@@ -21,8 +19,8 @@ class Room <<entity>> {
     - status : RoomStatus
     - notes : String
     - version : Number
-    + findById(roomId) : Room
-    + findOneAndUpdate(filter, update, options) : Room
+    +getRoom(id) : Room
+    +updateStatus(id, status) : Room
 }
 
 enum RoomStatus <<enumeration>> {
@@ -36,6 +34,5 @@ enum RoomStatus <<enumeration>> {
 RoomRackPage ..> FrontDeskController : PATCH /api/rooms/:id/status
 FrontDeskController ..> Room
 Room --> RoomStatus : status
-
 
 @enduml

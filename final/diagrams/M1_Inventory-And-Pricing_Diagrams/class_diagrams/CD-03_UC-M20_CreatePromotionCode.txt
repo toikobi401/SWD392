@@ -5,20 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class PromotionsPage <<boundary>> {
-    + setCreating(value)
-    + submit(e)
+    +createPromotion()
 }
 
 class PromotionController <<boundary>> {
-    + create(req, res)
-    + authenticate(req)
-    + requirePermission(permission)
-    + validateBody(rules)
-    + inputFrom(body)
-    + termsFrom(input)
-    + problemsWith(terms) : String[]
-    + redact(value)
-    + view(promotion, usage, now)
+    +create(req, res)
+    +validateRequest(req)
 }
 
 class Promotion <<entity>> {
@@ -36,30 +28,8 @@ class Promotion <<entity>> {
     - isPublic : Boolean
     - createdBy : ObjectId
     - createdAt : Date
-    + exists(filter) : ObjectIdResult
-    + create(data) : Promotion
-    + findById(id) : Promotion
-}
-
-class AuditLog <<entity>> {
-    - _id : ObjectId
-    - actorId : ObjectId
-    - action : String
-    - entityType : String
-    - entityId : String
-    - after : Mixed
-    - timestamp : Date
-    + create(entry) : AuditLog
-}
-
-class Booking <<entity>> {
-    - _id : ObjectId
-    - promotionId : ObjectId
-    - reservationCode : String
-    - status : BookingStatus
-    - discount : Number
-    - totalAmount : Number
-    + aggregate(pipeline) : UsageRow[]
+    +codeExists(code) : Boolean
+    +createPromotion(data) : Promotion
 }
 
 enum DiscountType <<enumeration>> {
@@ -67,22 +37,8 @@ enum DiscountType <<enumeration>> {
     FIXED_AMOUNT
 }
 
-enum BookingStatus <<enumeration>> {
-    PENDING
-    CONFIRMED
-    CHECKED_IN
-    CHECKED_OUT
-    CANCELLED
-    NO_SHOW
-}
-
 PromotionsPage ..> PromotionController : POST /api/promotions
 PromotionController ..> Promotion
-PromotionController ..> AuditLog
-PromotionController ..> Booking
-Promotion "0..1" -- "0..*" Booking : promotionId
 Promotion --> DiscountType : discountType
-Booking --> BookingStatus : status
-
 
 @enduml

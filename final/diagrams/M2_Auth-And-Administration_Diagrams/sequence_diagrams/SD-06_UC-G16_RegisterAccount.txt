@@ -8,104 +8,37 @@ entity "User" as U
 database "MongoDB" as DB
 participant "Email service" as E
 
-
-G -> UI : submit(e) - fullName, email, phone, passwords, acceptedTerms
+G -> UI : fill registration form
 activate G
 activate UI
-UI -> C : POST /api/auth/register (form)\nregister(req, res)
+UI -> C : submit registration
 activate C
-C -> C : validateBody(rules)
-alt required fields missing or wrong type
-    C --> UI : 400 VALIDATION_ERROR
-    UI --> G : show field errors
-else terms not accepted
-    C --> UI : 400 TERMS_NOT_ACCEPTED
-    UI --> G : ask user to accept terms
-else password differs from confirmPassword
-    C --> UI : 400 PASSWORD_MISMATCH
-    UI --> G : "Passwords do not match"
-else matching passwords and accepted terms
-    C -> C : assertPasswordStrength(password)
-    alt fewer than 8 characters or missing uppercase, lowercase or digit
-        C --> UI : 400 WEAK_PASSWORD
-        UI --> G : show failed password strength rules
-    else strong password
-        C -> U : findOne({ email })
-        activate U
-        U -> DB : query normalized email
-        activate DB
-        DB --> U : existing user or null
-        deactivate DB
-        U --> C : existing user or null
-        deactivate U
-        alt email already registered
-            C --> UI : 409 EMAIL_IN_USE
-            UI --> G : "This email is already in use"
-        else email available
-            C -> U : create(fields) - Customer.create using User discriminator
-            activate U
-            U -> DB : insert customer into users collection
-            activate DB
-            alt concurrent registration violates unique email index
-                DB --> U : duplicate key error
-                U --> C : error
-                C --> UI : 409 DUPLICATE_KEY
-                UI --> G : show duplicate value error
-            else created
-                DB --> U : customer document
-                U --> C : customer
-            end
-            deactivate DB
-            deactivate U
-            opt customer created successfully
-                C -> C : signVerificationToken(userId)
-                C -> E : sendVerificationLink(email, token)
-                activate E
-                alt email accepted
-                    E --> C : accepted
-                else delivery fails
-                    E --> C : delivery error
-                end
-                deactivate E
-                C -> C : record(ACCOUNT_REGISTERED)
-                C --> UI : 201 Created (message, user: id, email, fullName)
-                UI --> G : "Please check your email to verify your account"
-            end
-        end
-    end
+C -> C : validate request
+C -> U : check email exists
+activate U
+U -> DB : find user by email
+activate DB
+DB --> U : search result
+deactivate DB
+U --> C : email status
+deactivate U
+alt email not registered
+C -> U : create account
+activate U
+U -> DB : save user
+activate DB
+DB --> U : user saved
+deactivate DB
+U --> C : new account
+deactivate U
+C -> E : send verification email
+C --> UI : registration successful
+UI --> G : ask to verify email
+else email already registered
+C --> UI : email already registered
+UI --> G : show error message
 end
 deactivate C
 deactivate UI
 deactivate G
-
-opt Guest opens the emailed link
-    G -> UI : verify(token) - continuation handled by VerifyEmailPage
-    activate G
-    activate UI
-    alt link has no token
-        UI --> G : show missing-token error without an API request
-    else token present
-        UI -> C : GET /api/auth/verify?token=token\nverifyEmail(req, res)
-        activate C
-        alt token invalid or expired
-            C --> UI : 400 LINK_EXPIRED
-            UI --> G : show expired-link error
-        else valid token
-            C -> U : findByIdAndUpdate(sub, { status: ACTIVE, emailVerifiedAt: now })
-            activate U
-            U -> DB : update user by _id
-            activate DB
-            DB --> U : previous user document or null
-            deactivate DB
-            U --> C : previous user document or null
-            deactivate U
-            C --> UI : 200 OK (message)
-            UI --> G : show account-active message and sign-in link
-        end
-        deactivate C
-    end
-    deactivate UI
-    deactivate G
-end
-
 @enduml

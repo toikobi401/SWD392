@@ -5,12 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class "BookingWizardPage" as UI <<boundary>> {
-    + toReview(e)
-    + book.mutate()
+    +submitBooking()
 }
 
 class "BookingController" as C <<boundary>> {
-    + create(req, res)
+    +create(req, res)
+    +validateRequest(req)
 }
 
 class "Booking" as B <<entity>> {
@@ -37,8 +37,8 @@ class "Booking" as B <<entity>> {
     - totalAmount : Number
     - cancelledAt : Date
     - cancellationReason : String
-    + create(pricedBookings) : Booking[]
-    + save() : Booking
+    +checkAvailability(typeId, dates) : Boolean
+    +createPending(data) : Booking
 }
 
 enum BookingStatus <<enumeration>> {
@@ -51,11 +51,10 @@ enum BookingStatus <<enumeration>> {
 }
 
 class "PayOS" as P <<external>> {
-    + charge(request) : ChargeResult
+    +createPaymentLink(order) : String
 }
 
 C ..> P : POST /v2/payment-requests
-
 
 UI ..> C : POST /api/bookings
 C ..> B

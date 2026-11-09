@@ -7,63 +7,27 @@ boundary "RoomController" as C
 entity "Room" as R
 database "MongoDB" as DB
 
-M -> UI : select a room to edit
+M -> UI : edit room info and save
 activate M
 activate UI
-UI -> C : GET /api/rooms/:id
+UI -> C : submit room changes
 activate C
-C -> R : findById(id)
+C -> C : validate request
+C -> R : update room info
 activate R
-R -> DB : query room by _id
+R -> DB : save room
 activate DB
-DB --> R : room document
+DB --> R : save result
 deactivate DB
-R --> C : room
+R --> C : update result
 deactivate R
-C --> UI : 200 OK (room, version)
-deactivate C
-UI --> M : show form with current values
-deactivate UI
-deactivate M
-
-M -> UI : edit roomNumber, floor, notes and save
-activate M
-activate UI
-UI -> C : PATCH /api/rooms/:id (roomNumber, floor, notes, version)
-activate C
-C -> C : authenticate, requirePermission(MANAGE_INVENTORY), validate input
-
-alt not signed in or missing permission
-    C --> UI : 401 Unauthorized / 403 Forbidden
-    UI --> M : show access error
-else invalid input
-    C --> UI : 400 Bad Request
-    UI --> M : show field errors
-else valid request
-    C -> R : findOneAndUpdate(_id + version, $set fields, $inc version)
-    activate R
-    R -> DB : conditional update
-    activate DB
-    alt roomNumber already used (unique index)
-        DB --> R : duplicate key error
-        R --> C : error
-        C --> UI : 409 Conflict
-        UI --> M : "Room number already exists"
-    else _id + version not matched
-        DB --> R : no document
-        R --> C : null
-        C --> UI : 409 ROOM_CHANGED
-        UI --> M : "Room changed meanwhile, refresh and retry"
-    else updated
-        DB --> R : updated document
-        R --> C : updated room
-        C --> UI : 200 OK (room)
-        UI --> M : show success, refresh room details
-    end
-    deactivate DB
-    deactivate R
+alt room number is unique
+C --> UI : room updated
+UI --> M : show updated room details
+else room number already exists
+C --> UI : room number already exists
+UI --> M : show error message
 end
-
 deactivate C
 deactivate UI
 deactivate M

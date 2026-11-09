@@ -5,16 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class RoomInventoryPage <<boundary>> {
-    + selectRoomToEdit(id)
-    + saveRoomInfo(roomNumber, floor, notes, version)
+    +saveRoomInfo()
 }
 
 class RoomController <<boundary>> {
-    + getRoom(req, res)
-    + updateRoom(req, res)
-    + authenticate(req)
-    + requirePermission(permission)
-    + validateInput(input)
+    +updateRoom(req, res)
+    +validateRequest(req)
 }
 
 class Room <<entity>> {
@@ -24,8 +20,7 @@ class Room <<entity>> {
     - notes : String
     - version : Number
     - status : RoomStatus
-    + findById(id) : Room
-    + findOneAndUpdate(filter, update) : Room
+    +updateRoomInfo(id, data) : Room
 }
 
 enum RoomStatus <<enumeration>> {
@@ -39,6 +34,5 @@ enum RoomStatus <<enumeration>> {
 RoomInventoryPage ..> RoomController : GET /api/rooms/:id\nPATCH /api/rooms/:id
 RoomController ..> Room
 Room --> RoomStatus : status
-
 
 @enduml

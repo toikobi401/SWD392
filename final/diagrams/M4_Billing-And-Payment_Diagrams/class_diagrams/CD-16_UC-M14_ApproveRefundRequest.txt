@@ -5,18 +5,14 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class ApprovalsPage <<boundary>> {
-    + setTab(tab)
-    + decide.mutate(approve)
+    +loadPendingRefunds()
+    +approveRefund(id, amount)
 }
 
 class RefundController <<boundary>> {
-    + pending(req, res)
-    + decide(req, res)
-    + authenticate()
-    + requirePermission(permission)
-    + notifyOutcome(request, outcome, note)
-    + auditDecision(request, command, action)
-    + refund(bookingId, amount, actorId)
+    +pending(req, res)
+    +decide(req, res)
+    +validateRequest(req)
 }
 
 class RefundRequest <<entity>> {
@@ -34,13 +30,8 @@ class RefundRequest <<entity>> {
     - decidedAt : Date
     - decisionNote : String
     - createdAt : Date
-    + find(filter) : Query<RefundRequest[]>
-    + findById(id) : RefundRequest
-    + save() : RefundRequest
-}
-
-class EmailService <<external>> {
-    + sendDecisionNotice(to, subject, body)
+    +getPending() : RefundRequest[]
+    +approve(id, amount) : RefundRequest
 }
 
 enum RefundStatus <<enumeration>> {
@@ -54,7 +45,6 @@ enum RefundStatus <<enumeration>> {
 ApprovalsPage ..> RefundController : GET /api/refund-requests/pending
 ApprovalsPage ..> RefundController : PATCH /api/refund-requests/:id/decision
 RefundController ..> RefundRequest
-RefundController ..> EmailService
 RefundRequest --> RefundStatus
 
 @enduml

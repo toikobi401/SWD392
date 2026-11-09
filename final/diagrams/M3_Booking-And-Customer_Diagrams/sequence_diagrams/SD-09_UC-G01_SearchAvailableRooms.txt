@@ -8,72 +8,36 @@ entity "RoomType" as RT
 entity "Booking" as B
 database "MongoDB" as DB
 
-G -> UI : search(e)
+G -> UI : enter dates and guests
 activate G
 activate UI
-
-alt check-in before today
-    UI --> G : "Check-in cannot be in the past."
-else check-out not after check-in
-    UI --> G : "Check-out must be after check-in."
-else stay exceeds 30 nights
-    UI --> G : "For stays longer than 30 nights, please contact the hotel."
-else valid form
-    UI -> C : GET /api/rooms/search?checkIn=&checkOut=&adults=&children=\nsearch(req, res)
-    activate C
-    C -> C : search(req, res)\nparse dates; partySize = adults + children
-    alt unparseable date (direct API request)
-        C --> UI : 400 INVALID_DATE
-        UI --> G : show date error
-    else parseable dates
-        C -> RT : find({isActive: true, capacity: {$gte: 1}})
-        activate RT
-        RT -> DB : query candidate room types
-        activate DB
-        DB --> RT : candidate documents
-        deactivate DB
-        RT --> C : candidates
-        deactivate RT
-        loop each candidate room type
-            C -> RT : findById(roomTypeId)
-            activate RT
-            RT -> DB : query room type by _id
-            activate DB
-            DB --> RT : room type document
-            deactivate DB
-            RT --> C : roomType
-            deactivate RT
-            C -> B : countDocuments({roomTypeId, status: {$in: [CONFIRMED, CHECKED_IN]},\ncheckInDate: {$lt: checkOut}, checkOutDate: {$gt: checkIn}})
-            activate B
-            B -> DB : count live overlapping bookings
-            activate DB
-            DB --> B : count
-            deactivate DB
-            B --> C : bookedCount
-            deactivate B
-            C -> C : search(req, res)\nforRoomType: count OUT_OF_ORDER rooms and unexpired overlapping holds;\navailableCount = max(0, totalRooms - bookedCount - blockedCount - heldCount)
-        end
-        C -> RT : find({_id: {$in: availableRoomTypeIds}})
-        activate RT
-        RT -> DB : query types with availableCount >= 1
-        activate DB
-        DB --> RT : available room type documents
-        deactivate DB
-        RT --> C : roomTypes
-        deactivate RT
-        C -> C : search(req, res)\nsearchPriced: calculate nightly seasonal prices and 10% VAT;\nset fitsParty; sort fitsParty first, then total ascending
-        alt no available room types
-            C --> UI : 200 OK (checkIn, checkOut, results: [], count: 0)
-            UI --> G : "Nothing free for these dates. Try moving your dates by a day or two."
-        else rooms available
-            C --> UI : 200 OK (checkIn, checkOut, results, count)
-            UI --> G : show photos, amenities, capacity, availableCount and total
-        end
-    end
-    deactivate C
+UI -> C : search available rooms
+activate C
+C -> C : validate request
+C -> RT : get active room types
+activate RT
+RT -> DB : find room types
+activate DB
+DB --> RT : room types
+deactivate DB
+RT --> C : room types
+deactivate RT
+C -> B : count overlapping bookings
+activate B
+B -> DB : count bookings
+activate DB
+DB --> B : booking counts
+deactivate DB
+B --> C : booked rooms
+deactivate B
+alt rooms available
+C --> UI : available room types and prices
+UI --> G : show search results
+else no rooms available
+C --> UI : empty result
+UI --> G : show no availability message
 end
-
+deactivate C
 deactivate UI
 deactivate G
-
 @enduml

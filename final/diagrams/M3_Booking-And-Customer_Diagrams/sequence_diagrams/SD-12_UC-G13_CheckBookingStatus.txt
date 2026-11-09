@@ -7,48 +7,28 @@ boundary "BookingController" as C
 entity "Booking" as B
 database "MongoDB" as DB
 
-G -> UI : setQuery({code, email})
+G -> UI : enter booking code and email
 activate G
 activate UI
-
-alt code missing or email missing/invalid in form
-    UI --> G : browser required/email validation; correct fields
-else valid form or code/email supplied in page URL
-    UI -> C : GET /api/bookings/lookup?code=&email=\nlookup(req, res)
-    activate C
-    C -> C : lookup(req, res)\ntrim and uppercase code; trim and lowercase email; no authentication
-    C -> B : findOne({$or: [{bookingCode: trimmed}, {reservationCode: trimmed}],\n"guest.email": normalizedEmail})
-    activate B
-    B -> DB : query matching code AND email
-    activate DB
-    DB --> B : matching document or null
-    deactivate DB
-    B --> C : match or null
-    deactivate B
-    alt no matching code/email pair
-        C --> UI : 404 NOT_FOUND
-        UI --> G : "No booking matches that code and email"
-    else match found
-        C -> C : lookup(req, res)\nreservationCode = match.reservationCode ?? match.bookingCode
-        C -> B : find({reservationCode}).populate("roomTypeId").sort({bookingCode: 1})
-        activate B
-        B -> DB : query reservation bookings and populate referenced room types
-        activate DB
-        DB --> B : booking documents with room type details
-        deactivate DB
-        B --> C : bookings ordered by bookingCode
-        deactivate B
-        C --> UI : 200 OK (reservationCode, bookings)
-        alt exactly one room
-            UI --> G : show booking summary, status, dates, guest count and totalAmount
-        else multiple rooms
-            UI --> G : show reservation table with each room code, occupant, status and price;\nsum totalAmount excluding CANCELLED and NO_SHOW
-        end
-    end
-    deactivate C
+UI -> C : look up booking
+activate C
+C -> C : validate request
+C -> B : find booking by code and email
+activate B
+B -> DB : query booking
+activate DB
+DB --> B : search result
+deactivate DB
+B --> C : booking
+deactivate B
+alt booking found
+C --> UI : booking details and status
+UI --> G : show booking status
+else no matching booking
+C --> UI : booking not found
+UI --> G : show error message
 end
-
+deactivate C
 deactivate UI
 deactivate G
-
 @enduml

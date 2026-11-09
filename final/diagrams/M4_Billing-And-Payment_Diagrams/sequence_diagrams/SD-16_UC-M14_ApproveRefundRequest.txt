@@ -6,137 +6,41 @@ boundary "ApprovalsPage" as UI
 boundary "RefundController" as C
 entity "RefundRequest" as R
 database "MongoDB" as DB
-participant "Email service" as X
 
-
-M -> UI : setTab("refunds")
+M -> UI : open pending refunds
 activate M
 activate UI
-UI -> C : GET /api/refund-requests/pending\npending(req, res)
+UI -> C : request pending refunds
 activate C
-C -> C : authenticate()
-C -> C : requirePermission(APPROVE_REFUND)
-alt invalid or expired authentication
-    C --> UI : 401 UNAUTHORIZED / INVALID_TOKEN / TOKEN_EXPIRED
-    UI --> M : show access error
-else missing APPROVE_REFUND
-    C --> UI : 403 FORBIDDEN
-    UI --> M : show access error
-else authorized
-    C -> R : find({status:PENDING}).populate("bookingId", bookingFields)\n.populate("requestedBy", userFields).sort({createdAt:1})
-    activate R
-    R -> DB : query pending requests and referenced booking/user display fields
-    activate DB
-    DB --> R : requests (oldest first)
-    deactivate DB
-    R --> C : requests
-    deactivate R
-    C --> UI : 200 OK (requests, count)
-    alt queue empty
-        UI --> M : show no refunds waiting
-    else requests available
-        UI --> M : show requests, reasons, amounts and customer/booking details
-    end
+C -> R : get pending refund requests
+activate R
+R -> DB : find pending requests
+activate DB
+DB --> R : requests
+deactivate DB
+R --> C : pending requests
+deactivate R
+C --> UI : pending refund list
+UI --> M : show pending list
+M -> UI : approve request with amount
+UI -> C : submit decision
+C -> C : validate request
+alt amount within captured total
+C -> R : approve refund request
+activate R
+R -> DB : save decision
+activate DB
+DB --> R : decision saved
+deactivate DB
+R --> C : updated request
+deactivate R
+C --> UI : refund approved
+UI --> M : remove request from list
+else amount exceeds captured total
+C --> UI : invalid refund amount
+UI --> M : show error message
 end
 deactivate C
 deactivate UI
 deactivate M
-
-M -> UI : decide.mutate(approve) with amount and note
-activate M
-activate UI
-UI -> C : PATCH /api/refund-requests/:id/decision (approve, approvedAmount, note)\ndecide(req, res)
-activate C
-C -> C : authenticate()
-C -> C : requirePermission(APPROVE_REFUND)
-alt invalid or expired authentication
-    C --> UI : 401 UNAUTHORIZED / INVALID_TOKEN / TOKEN_EXPIRED
-    UI --> M : show access error
-else missing APPROVE_REFUND
-    C --> UI : 403 FORBIDDEN
-    UI --> M : show access error
-else authorized
-    C -> R : findById(refundId)
-    activate R
-    R -> DB : query refund request
-    activate DB
-    DB --> R : request or null
-    deactivate DB
-    R --> C : request or null
-    deactivate R
-    alt request missing
-        C --> UI : 404 NOT_FOUND
-        UI --> M : show request not found
-    else request status is not PENDING
-        C --> UI : 409 ALREADY_DECIDED
-        UI --> M : show already decided error
-    else reject with blank note
-        C --> UI : 400 REASON_REQUIRED
-        UI --> M : require a rejection reason
-    else reject with reason
-        C -> C : decide(req, res)\nset REJECTED, decidedBy, decidedAt, decisionNote
-        C -> R : save()
-        activate R
-        R -> DB : persist rejection and manager identity
-        activate DB
-        DB --> R : saved request
-        deactivate DB
-        R --> C : request
-        deactivate R
-        C -> C : notifyOutcome(request, "rejected", note)\nUser.findById(requestedBy)
-        opt customer exists
-            C -> X : sendDecisionNotice(customer.email, outcome, note)
-            activate X
-            X --> C : delivered or delivery error (caught)
-            deactivate X
-        end
-        C -> C : auditDecision(request, command, REFUND_REJECTED)
-        C --> UI : 200 OK (referenceNumber, status:REJECTED, approvedAmount)
-        UI --> M : show rejection; invalidate and reload refund queue
-    else approve full or partial amount
-        C -> C : decide(req, res)\napproved = min(approvedAmount or requestedAmount, requestedAmount)\nset APPROVED, approvedAmount, decidedBy, decidedAt, decisionNote
-        C -> R : save()
-        activate R
-        R -> DB : persist approval
-        activate DB
-        DB --> R : saved request
-        deactivate DB
-        R --> C : request
-        deactivate R
-        C -> C : refund(bookingId, approved, approverId)\nPayment.find({bookingId, status:PAID}); sum captures
-        alt approved amount exceeds total captured
-            C --> UI : 400 REFUND_EXCEEDS_CAPTURE
-            UI --> M : show error; approval was already saved
-        else amount within captured total
-            C -> C : refund(bookingId, approved, approverId)\nselect captured payment with gatewayOrderCode
-            alt gateway payment exists
-                C -> C : refund(bookingId, approved, approverId)\nproxy returns NOT_SUPPORTED without a network call;\nPayment.create(FAILED reversal with reversalOfId); record manual transfer required
-            else cash-only capture
-            end
-            C -> C : decide(req, res)\nset status=REFUND_FAILED (no REVERSED reversal in current implementation)
-            C -> R : save()
-            activate R
-            R -> DB : persist settlement-pending status
-            activate DB
-            DB --> R : saved request
-            deactivate DB
-            R --> C : request
-            deactivate R
-            C -> C : notifyOutcome(request, "approved (settlement pending)", note)\nUser.findById(requestedBy)
-            opt customer exists
-                C -> X : sendDecisionNotice(customer.email, outcome, note)
-                activate X
-                X --> C : delivered or delivery error (caught)
-                deactivate X
-            end
-            C -> C : auditDecision(request, command, REFUND_APPROVED)
-            C --> UI : 200 OK (referenceNumber, status:REFUND_FAILED, approvedAmount)
-            UI --> M : show approved, manual transfer pending; invalidate and reload queue
-        end
-    end
-end
-deactivate C
-deactivate UI
-deactivate M
-
 @enduml

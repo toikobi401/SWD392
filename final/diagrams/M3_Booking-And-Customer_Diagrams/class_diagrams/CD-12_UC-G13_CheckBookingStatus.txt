@@ -5,11 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class "BookingLookupPage" as UI <<boundary>> {
-    + setQuery(query)
+    +lookup(code, email)
 }
 
 class "BookingController" as C <<boundary>> {
-    + lookup(req, res)
+    +lookup(req, res)
+    +validateRequest(req)
 }
 
 class "Booking" as B <<entity>> {
@@ -26,10 +27,7 @@ class "Booking" as B <<entity>> {
     - children : Number
     - status : BookingStatus
     - totalAmount : Number
-    + findOne(filter) : Booking
-    + find(filter) : Query<Booking[]>
-    + populate(path) : Query<Booking[]>
-    + sort(order) : Query<Booking[]>
+    +findByCodeAndEmail(code, email) : Booking
 }
 
 enum BookingStatus <<enumeration>> {
@@ -40,7 +38,6 @@ enum BookingStatus <<enumeration>> {
     CANCELLED
     NO_SHOW
 }
-
 
 UI ..> C : GET /api/bookings/lookup
 C ..> B

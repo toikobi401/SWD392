@@ -5,16 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class MyLeavePage <<boundary>> {
-    + submitLeave(type, fromDate, toDate, reason)
-    + onSuccess()
+    +submitLeave(type, fromDate, toDate, reason)
 }
 
 class LeaveController <<boundary>> {
-    + submit(req, res)
-    + authenticate(req, res, next)
-    + submit(command)
-    + countDays(fromDate, toDate) : Number
-    + record(entry)
+    +submit(req, res)
+    +validateRequest(req)
 }
 
 class LeaveRequest <<entity>> {
@@ -27,7 +23,7 @@ class LeaveRequest <<entity>> {
     - reason : String
     - status : LeaveStatus
     - createdAt : Date
-    + create(data) : LeaveRequest
+    +createRequest(data) : LeaveRequest
 }
 
 enum LeaveType <<enumeration>> {

@@ -5,14 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class LoginPage <<boundary>> {
-    + submit(e)
+    +login(email, password)
 }
 
 class AuthController <<boundary>> {
-    + login(req, res)
-    + validateBody(rules)
-    + record(entry)
-    + issueTokens(user) : AuthTokens
+    +login(req, res)
+    +validateRequest(req)
 }
 
 class User <<entity>> {
@@ -24,15 +22,7 @@ class User <<entity>> {
     - roles : ObjectId[]
     - failedLoginAttempts : Number
     - lastLoginAt : Date
-    + findOne(filter) : Query<User>
-    + select(fields) : Query<User>
-    + populate(path) : Query<User>
-    + verifyPassword(plain) : Promise<Boolean>
-    + save() : Promise<User>
-}
-
-class EmailService <<external>> {
-    + sendDecisionNotice(to, subject, body)
+    +findByEmail(email) : User
 }
 
 enum AccountStatus <<enumeration>> {
@@ -44,9 +34,6 @@ enum AccountStatus <<enumeration>> {
 
 LoginPage ..> AuthController : POST /api/auth/login
 AuthController ..> User
-AuthController ..> EmailService : lockout notice
 User --> AccountStatus : status
-
-
 
 @enduml

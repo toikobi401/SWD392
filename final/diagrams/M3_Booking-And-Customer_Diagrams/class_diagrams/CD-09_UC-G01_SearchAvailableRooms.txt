@@ -5,11 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class "RoomSearchPage" as UI <<boundary>> {
-    + search(e)
+    +search(criteria)
 }
 
 class "RoomController" as C <<boundary>> {
-    + search(req, res)
+    +search(req, res)
+    +validateRequest(req)
 }
 
 class "RoomType" as RT <<entity>> {
@@ -23,8 +24,7 @@ class "RoomType" as RT <<entity>> {
     - totalRooms : Number
     - seasonalRates : {from: Date, to: Date, price: Number}[]
     - isActive : Boolean
-    + find(filter) : RoomType[]
-    + findById(id) : RoomType
+    +getActiveTypes() : RoomType[]
 }
 
 class "Booking" as B <<entity>> {
@@ -33,7 +33,7 @@ class "Booking" as B <<entity>> {
     - checkInDate : Date
     - checkOutDate : Date
     - status : BookingStatus
-    + countDocuments(filter) : Number
+    +countOverlapping(typeId, dates) : Number
 }
 
 enum BookingStatus <<enumeration>> {

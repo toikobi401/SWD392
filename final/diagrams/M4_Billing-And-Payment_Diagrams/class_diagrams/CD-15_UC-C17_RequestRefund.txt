@@ -5,16 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class BookingDetailPage <<boundary>> {
-    + setRefunding(value)
-    + send.mutate()
+    +requestRefund(bookingId, amount, reason)
 }
 
 class RefundController <<boundary>> {
-    + request(req, res)
-    + authenticate()
-    + validateBody(rules)
-    + record(action)
-    + decide(command)
+    +request(req, res)
+    +validateRequest(req)
 }
 
 class RefundRequest <<entity>> {
@@ -31,14 +27,7 @@ class RefundRequest <<entity>> {
     - decidedBy : ObjectId
     - decidedAt : Date
     - decisionNote : String
-    + findOne(filter) : RefundRequest
-    + create(fields) : RefundRequest
-    + findById(id) : RefundRequest
-    + save() : RefundRequest
-}
-
-class EmailService <<external>> {
-    + sendDecisionNotice(to, subject, body)
+    +createRequest(data) : RefundRequest
 }
 
 enum RefundStatus <<enumeration>> {
@@ -51,7 +40,6 @@ enum RefundStatus <<enumeration>> {
 
 BookingDetailPage ..> RefundController : POST /api/refund-requests
 RefundController ..> RefundRequest
-RefundController ..> EmailService
 RefundRequest --> RefundStatus
 
 @enduml

@@ -5,16 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class AccountsPage <<boundary>> {
-    + assignRole(id, roleId)
+    +assignRole(accountId, roleId)
 }
 
 class AccountController <<boundary>> {
-    + assignRole(req, res)
-    + authenticate(req, res, next)
-    + requirePermission(permission)
-    + assertNoPrivilegeEscalation(actor, incoming, actorId)
-    + assertNoSegregationConflict(current, incoming)
-    + record(entry)
+    +assignRole(req, res)
+    +validateRequest(req)
 }
 
 class User <<entity>> {
@@ -22,21 +18,15 @@ class User <<entity>> {
     - email : String
     - status : AccountStatus
     - roles : ObjectId[]
-    + findById(id) : Query<User>
-    + populate(path) : Query<User>
-    + save() : Promise<User>
-    + findByIdAndUpdate(id, update) : Query<User>
+    +getAccount(id) : User
+    +addRole(id, roleId) : User
 }
 
 class Role <<entity>> {
     - _id : ObjectId
     - name : RoleName
     - permissions : Permission[]
-    + findById(id) : Query<Role>
-}
-
-class EmailService <<external>> {
-    + sendDecisionNotice(to, subject, body)
+    +getRole(id) : Role
 }
 
 enum AccountStatus <<enumeration>> {
@@ -82,13 +72,9 @@ enum Permission <<enumeration>> {
 AccountsPage ..> AccountController : POST /api/accounts/:id/roles
 AccountController ..> User
 AccountController ..> Role
-AccountController ..> EmailService : access-change notice
 User "0..*" -- "0..*" Role : roles
 User --> AccountStatus : status
 Role --> RoleName : name
 Role --> Permission : permissions
-
-
-
 
 @enduml

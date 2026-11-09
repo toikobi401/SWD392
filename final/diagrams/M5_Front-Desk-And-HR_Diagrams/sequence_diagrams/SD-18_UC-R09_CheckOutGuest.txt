@@ -8,102 +8,44 @@ entity "Folio" as F
 entity "Room" as R
 database "MongoDB" as DB
 
-
-loop check-out attempt; retry after separate folio settlement if necessary
-    A -> UI : submitCheckOut(lateCheckoutSurcharge, waiveSurcharge)
-    activate A
-    activate UI
-    UI -> C : POST /api/front-desk/check-out\ncheckOut(req, res): bookingId, lateCheckoutSurcharge, waiveSurcharge
-    activate C
-    C -> C : authenticate(req, res, next)
-    C -> C : requirePermission(CHECK_OUT)
-    C -> C : validateBody(bookingId)
-    alt authentication or permission failure
-        C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN or 403 FORBIDDEN
-        UI --> A : show access error
-    else bookingId missing or not a string
-        C --> UI : 400 VALIDATION_ERROR
-        UI --> A : show field error
-    else valid request
-        C -> C : checkOut(command)
-        alt booking not found
-            C --> UI : 404 BOOKING_NOT_FOUND
-            UI --> A : show booking not found
-        else booking.status != CHECKED_IN
-            C --> UI : 409 CANNOT_CHECK_OUT
-            UI --> A : show invalid booking state
-        else in-house booking
-            C -> F : findOne({bookingId: booking._id})
-            activate F
-            F -> DB : query folio for booking
-            activate DB
-            DB --> F : folio document or null
-            deactivate DB
-            F --> C : folio or null
-            deactivate F
-            alt folio not found
-                C --> UI : 404 FOLIO_NOT_FOUND
-                UI --> A : show missing folio error
-            else folio found
-                opt lateCheckoutSurcharge is nonzero and waiveSurcharge is false
-                    C -> C : checkOut(command)
-                    opt surcharge has not already been posted
-                        C -> C : post(folioId, surchargeLine, receptionistId)
-                        C -> F : findByIdAndUpdate(folioId,\n{$inc: {totalCharges: net + tax, balance: net + tax}})
-                        activate F
-                        F -> DB : increment folio charges and balance
-                        activate DB
-                        DB --> F : previous folio document
-                        deactivate DB
-                        F --> C : folio
-                        deactivate F
-                    end
-                end
-                C -> F : findById(folio._id)
-                activate F
-                F -> DB : reload balance after any ledger posting
-                activate DB
-                DB --> F : current folio document
-                deactivate DB
-                F --> C : current folio
-                deactivate F
-                alt current.balance - current.depositHeld > 0
-                    C --> UI : 402 OUTSTANDING_BALANCE
-                    UI --> A : open folio payment link, settle separately, then retry check-out
-                else deposit covers the balance or no balance remains
-                    C -> C : checkOut(command)
-                    C -> F : updateOne({_id: folio._id},\n{$set: {status: CLOSED, closedAt: now}})
-                    activate F
-                    F -> DB : close folio without overwriting ledger values
-                    activate DB
-                    DB --> F : update result
-                    deactivate DB
-                    F --> C : update result
-                    deactivate F
-                    opt booking.roomId exists
-                        C -> R : findByIdAndUpdate(booking.roomId,\n{$set: {status: VACANT_DIRTY}, $inc: {version: 1}}, {new: true})
-                        activate R
-                        R -> DB : release room to housekeeping
-                        activate DB
-                        DB --> R : updated room document or null
-                        deactivate DB
-                        R --> C : room or null
-                        deactivate R
-                        C -> C : checkOut(command)
-                    end
-                    opt booking.customerId exists
-                        C -> C : checkOut(command)
-                    end
-                    C -> C : record(GUEST_CHECKED_OUT)
-                    C --> UI : 200 OK (bookingCode, status, invoiceNumber, total, checkedOutAt)
-                    UI --> A : show invoice number/total and room released for cleaning
-                end
-            end
-        end
-    end
-    deactivate C
-    deactivate UI
-    deactivate A
+A -> UI : request check-out
+activate A
+activate UI
+UI -> C : submit check-out
+activate C
+C -> C : validate request
+C -> F : get folio
+activate F
+F -> DB : find folio
+activate DB
+DB --> F : folio data
+deactivate DB
+F --> C : folio
+deactivate F
+alt balance is settled
+C -> F : close folio
+activate F
+F -> DB : save folio
+activate DB
+DB --> F : folio saved
+deactivate DB
+F --> C : closed folio
+deactivate F
+C -> R : release room
+activate R
+R -> DB : save room as VACANT_DIRTY
+activate DB
+DB --> R : room saved
+deactivate DB
+R --> C : released room
+deactivate R
+C --> UI : check-out completed with invoice
+UI --> A : show invoice
+else outstanding balance
+C --> UI : balance must be settled first
+UI --> A : show balance due
 end
-
+deactivate C
+deactivate UI
+deactivate A
 @enduml

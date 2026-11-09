@@ -5,21 +5,12 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class StaffBookingPage <<boundary>> {
-    + openCheckIn(booking)
-    + submitCheckIn(identity, roomId, roomVersion)
-    + onError(error)
-    + onSuccess(result)
+    +checkIn(bookingId, identity, roomId)
 }
 
 class FrontDeskController <<boundary>> {
-    + allocatableRooms(req, res)
-    + checkIn(req, res)
-    + authenticate(req, res, next)
-    + requirePermission(permission)
-    + validateBody(rules)
-    + verifyIdentity(identity, booking)
-    + record(entry)
-    + checkIn(command)
+    +checkIn(req, res)
+    +validateRequest(req)
 }
 
 class Booking <<entity>> {
@@ -36,9 +27,8 @@ class Booking <<entity>> {
     - actualCheckInAt : Date
     - subtotal : Number
     - discount : Number
-    + findById(id) : Booking
-    + save() : Booking
-    + nights() : Number
+    +getBooking(id) : Booking
+    +markCheckedIn(id, roomId) : Booking
 }
 
 class Room <<entity>> {
@@ -48,9 +38,7 @@ class Room <<entity>> {
     - floor : Number
     - status : RoomStatus
     - version : Number
-    + find(filter) : Query
-    + sort(order) : Room[]
-    + findOneAndUpdate(filter, update, options) : Room
+    +assign(roomId) : Room
 }
 
 enum BookingStatus <<enumeration>> {

@@ -5,16 +5,13 @@ skinparam classAttributeIconSize 0
 hide empty members
 
 class PaymentResultPage <<boundary>> {
-    + check()
+    +loadResult(orderCode)
 }
 
 class PaymentController <<boundary>> {
-    + webhook(req, res)
-    + reconcile(req, res)
-    + verifyWebhook(body)
-    + confirmFromGateway(outcome)
-    + record(action)
-    + sendConfirmationOnce(orderCode)
+    +webhook(req, res)
+    +reconcile(req, res)
+    +validateRequest(req)
 }
 
 class Payment <<entity>> {
@@ -32,13 +29,13 @@ class Payment <<entity>> {
     - expiresAt : Date
     - notifiedAt : Date
     - paidAt : Date
-    + find(filter) : Query<Payment[]>
-    + findOneAndUpdate(filter, update, options) : Payment
-    + findById(id) : Payment
+    +updateStatus(orderCode, status) : Payment
+    +getPayment(orderCode) : Payment
 }
 
 class PayOS <<external>> {
-    + getStatus(orderCode)
+    +checkout(order)
+    +sendWebhook(result)
 }
 
 enum PaymentStatus <<enumeration>> {
