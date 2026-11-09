@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 | **Lê Trần Trọng Đạt** | Inventory & Pricing |
 | M2 | ____________________ | Auth & Administration |
-| M3 | ____________________ | Booking & Customer |
+| M3 | Lê Đức Anh | Booking & Customer |
 | M4 | ____________________ | Billing & Payment |
 | M5 | ____________________ | Front Desk & HR |
 
