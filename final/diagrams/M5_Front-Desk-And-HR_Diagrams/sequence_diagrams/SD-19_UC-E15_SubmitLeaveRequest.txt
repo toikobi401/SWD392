@@ -1,0 +1,51 @@
+@startuml
+title SD-19 UC-E15 Submit Leave Request
+
+actor "Employee" as A
+boundary "MyLeavePage" as UI
+boundary "LeaveController" as C
+entity "LeaveRequest" as L
+database "MongoDB" as DB
+
+
+A -> UI : submitLeave(type, fromDate, toDate, reason)
+activate A
+activate UI
+UI -> C : POST /api/leave-requests\nsubmit(req, res): type, fromDate, toDate, reason
+activate C
+C -> C : authenticate(req, res, next)
+alt missing, expired or invalid token
+    C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN
+    UI --> A : show authentication error
+else authenticated
+    C -> C : submit(command)
+    alt toDate < fromDate
+        C --> UI : 400 INVALID_RANGE
+        UI --> A : end date must not precede start date
+    else date order accepted
+        C -> C : countDays(fromDate, toDate)
+        C -> L : create({employeeId, type, fromDate, toDate, days, reason, status: PENDING})
+        activate L
+        alt Mongoose validation fails (type, date, required field or days)
+            L --> C : ValidationError
+            C --> UI : 400 VALIDATION_ERROR
+            UI --> A : show validation error; correct form
+        else schema accepts request
+            L -> DB : insert leave request
+            activate DB
+            DB --> L : created document
+            deactivate DB
+            L --> C : leave request
+            C -> C : record(LEAVE_REQUESTED)
+            C --> UI : 201 Created (LeaveRequest, status = PENDING)
+            UI -> UI : onSuccess()
+            UI --> A : show submitted request in leave list
+        end
+        deactivate L
+    end
+end
+deactivate C
+deactivate UI
+deactivate A
+
+@enduml

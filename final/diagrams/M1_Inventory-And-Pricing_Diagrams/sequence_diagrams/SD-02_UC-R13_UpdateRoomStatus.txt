@@ -1,0 +1,70 @@
+@startuml
+title SD-02 UC-R13 Update Room Status
+
+actor "Receptionist" as RE
+boundary "RoomRackPage" as UI
+boundary "FrontDeskController" as C
+entity "Room" as R
+database "MongoDB" as DB
+
+RE -> UI : onAction(event, notes)
+activate RE
+activate UI
+UI -> C : PATCH /api/rooms/:id/status (event, notes)\nupdateRoomStatus(req, res)
+activate C
+C -> C : authenticate(req), requirePermission(ROOM_STATUS_UPDATE)
+
+alt missing, expired or invalid access token
+    C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN
+    UI --> RE : show access error
+else missing ROOM_STATUS_UPDATE permission
+    C --> UI : 403 FORBIDDEN
+    UI --> RE : show permission error
+else authorized request
+    C -> R : findById(roomId)
+    activate R
+    R -> DB : query room by _id
+    activate DB
+    DB --> R : room document or null
+    deactivate DB
+    R --> C : room or null
+    deactivate R
+
+    alt room not found
+        C --> UI : 404 NOT_FOUND
+        UI --> RE : show "Room not found"
+    else event is ASSIGN or CHECK_OUT
+        C --> UI : 400 USE_CHECK_IN_OUT
+        UI --> RE : use the check-in or check-out workflow
+    else manual status event
+        C -> C : next(room.status, event)
+
+        alt event is illegal for the current state
+            C --> UI : 500 INTERNAL_ERROR (IllegalStateTransitionError)
+            UI --> RE : show "An unexpected error occurred"
+        else legal transition
+            C -> R : findOneAndUpdate({_id, version: room.version},\n{$set: {status: next, ...(notes ? {notes} : {})},\n$inc: {version: 1}}, {new: true})
+            activate R
+            R -> DB : conditional update by _id and version
+            activate DB
+            alt version no longer matches
+                DB --> R : no document
+                R --> C : null
+                C --> UI : 409 ROOM_CHANGED
+                UI --> RE : show "The room changed meanwhile - refresh and retry"
+            else updated
+                DB --> R : updated document
+                R --> C : updated room
+                C --> UI : 200 OK ({id, roomNumber, status})
+                UI --> RE : refresh room rack and desk overview
+            end
+            deactivate DB
+            deactivate R
+        end
+    end
+end
+
+deactivate C
+deactivate UI
+deactivate RE
+@enduml

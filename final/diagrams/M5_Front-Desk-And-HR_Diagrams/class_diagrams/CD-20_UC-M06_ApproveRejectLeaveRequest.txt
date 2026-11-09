@@ -1,0 +1,75 @@
+@startuml
+title CD-20 UC-M06 Approve / Reject Leave Request
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class ApprovalsPage <<boundary>> {
+    + openLeaveApprovals(department)
+    + decideLeave(requestId, approve, note, coverageOverrideJustification)
+    + onError(error)
+    + onSuccess()
+}
+
+class LeaveController <<boundary>> {
+    + pending(req, res)
+    + decide(req, res)
+    + authenticate(req, res, next)
+    + requirePermission(permission)
+    + pendingQueue(department)
+    + decide(command)
+    + validateRejection(note)
+    + buildCoverageContext(request, employee)
+    + evaluate(request, employee, approverId, coverage)
+    + countDays(fromDate, toDate) : Number
+    + applyDecision(request, employee, command, status, grantedDays)
+    + record(entry)
+}
+
+class LeaveRequest <<entity>> {
+    - _id : ObjectId
+    - employeeId : ObjectId
+    - type : LeaveType
+    - fromDate : Date
+    - toDate : Date
+    - days : Number
+    - reason : String
+    - status : LeaveStatus
+    - approverId : ObjectId
+    - decidedAt : Date
+    - decisionNote : String
+    - coverageOverrideJustification : String
+    - createdAt : Date
+    + find(filter) : Query
+    + populate(path, fields) : Query
+    + sort(order) : LeaveRequest[]
+    + findById(id) : LeaveRequest
+    + save() : LeaveRequest
+}
+
+class EmailService <<external>> {
+    + sendDecisionNotice(to, subject, body)
+}
+
+enum LeaveType <<enumeration>> {
+    ANNUAL
+    SICK
+    UNPAID
+    MATERNITY
+}
+
+enum LeaveStatus <<enumeration>> {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+    ESCALATED
+}
+
+ApprovalsPage ..> LeaveController : GET /api/leave-requests/pending\nPATCH /api/leave-requests/:id/decision
+LeaveController ..> LeaveRequest
+LeaveController ..> EmailService : outcome notification
+LeaveRequest --> LeaveType
+LeaveRequest --> LeaveStatus
+
+@enduml

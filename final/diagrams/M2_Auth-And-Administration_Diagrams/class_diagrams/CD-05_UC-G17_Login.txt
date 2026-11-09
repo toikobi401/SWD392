@@ -1,0 +1,52 @@
+@startuml
+title CD-05 UC-G17 Login
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class LoginPage <<boundary>> {
+    + submit(e)
+}
+
+class AuthController <<boundary>> {
+    + login(req, res)
+    + validateBody(rules)
+    + record(entry)
+    + issueTokens(user) : AuthTokens
+}
+
+class User <<entity>> {
+    - _id : ObjectId
+    - email : String
+    - fullName : String
+    - passwordHash : String
+    - status : AccountStatus
+    - roles : ObjectId[]
+    - failedLoginAttempts : Number
+    - lastLoginAt : Date
+    + findOne(filter) : Query<User>
+    + select(fields) : Query<User>
+    + populate(path) : Query<User>
+    + verifyPassword(plain) : Promise<Boolean>
+    + save() : Promise<User>
+}
+
+class EmailService <<external>> {
+    + sendDecisionNotice(to, subject, body)
+}
+
+enum AccountStatus <<enumeration>> {
+    PENDING_VERIFICATION
+    ACTIVE
+    LOCKED
+    DEACTIVATED
+}
+
+LoginPage ..> AuthController : POST /api/auth/login
+AuthController ..> User
+AuthController ..> EmailService : lockout notice
+User --> AccountStatus : status
+
+
+
+@enduml

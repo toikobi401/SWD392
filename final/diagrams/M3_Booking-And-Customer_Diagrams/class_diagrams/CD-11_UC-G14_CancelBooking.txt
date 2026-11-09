@@ -1,0 +1,52 @@
+@startuml
+title CD-11 UC-G14 Cancel Booking
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class "BookingDetailPage" as UI <<boundary>> {
+    + setConfirming(value)
+    + cancel.mutate(reason)
+}
+
+class "BookingController" as C <<boundary>> {
+    + cancel(req, res)
+}
+
+class "Booking" as B <<entity>> {
+    - _id : ObjectId
+    - bookingCode : String
+    - customerId : ObjectId
+    - guest.fullName : String
+    - guest.email : String
+    - checkInDate : Date
+    - status : BookingStatus
+    - totalAmount : Number
+    - nonRefundable : Boolean
+    - cancelledAt : Date
+    - cancellationReason : String
+    + findById(id) : Booking
+    + save() : Booking
+}
+
+enum BookingStatus <<enumeration>> {
+    PENDING
+    CONFIRMED
+    CHECKED_IN
+    CHECKED_OUT
+    CANCELLED
+    NO_SHOW
+}
+
+class "EmailService" as E <<external>> {
+    + send(message)
+}
+
+C ..> E : POST /send
+
+
+UI ..> C : POST /api/bookings/:id/cancel
+C ..> B
+B --> BookingStatus : status
+
+@enduml

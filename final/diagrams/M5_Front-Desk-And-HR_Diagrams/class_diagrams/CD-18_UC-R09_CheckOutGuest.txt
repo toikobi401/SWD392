@@ -1,0 +1,62 @@
+@startuml
+title CD-18 UC-R09 Check Out Guest
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class StaffBookingPage <<boundary>> {
+    + submitCheckOut(lateCheckoutSurcharge, waiveSurcharge)
+}
+
+class FrontDeskController <<boundary>> {
+    + checkOut(req, res)
+    + authenticate(req, res, next)
+    + requirePermission(permission)
+    + validateBody(rules)
+    + checkOut(command)
+    + post(folioId, line, postedBy)
+    + record(entry)
+}
+
+class Folio <<entity>> {
+    - _id : ObjectId
+    - bookingId : ObjectId
+    - status : FolioStatus
+    - totalCharges : Number
+    - totalPayments : Number
+    - balance : Number
+    - depositHeld : Number
+    - closedAt : Date
+    + findOne(filter) : Folio
+    + findByIdAndUpdate(id, update) : Folio
+    + findById(id) : Folio
+    + updateOne(filter, update) : UpdateResult
+}
+
+class Room <<entity>> {
+    - _id : ObjectId
+    - status : RoomStatus
+    - version : Number
+    + findByIdAndUpdate(id, update, options) : Room
+}
+
+enum FolioStatus <<enumeration>> {
+    OPEN
+    CLOSED
+}
+
+enum RoomStatus <<enumeration>> {
+    VACANT_CLEAN
+    VACANT_DIRTY
+    OCCUPIED
+    INSPECTED
+    OUT_OF_ORDER
+}
+
+StaffBookingPage ..> FrontDeskController : POST /api/front-desk/check-out
+FrontDeskController ..> Folio
+FrontDeskController ..> Room
+Folio --> FolioStatus
+Room --> RoomStatus
+
+@enduml

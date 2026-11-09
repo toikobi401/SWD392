@@ -1,0 +1,49 @@
+@startuml
+title CD-12 UC-G13 Check Booking Status
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class "BookingLookupPage" as UI <<boundary>> {
+    + setQuery(query)
+}
+
+class "BookingController" as C <<boundary>> {
+    + lookup(req, res)
+}
+
+class "Booking" as B <<entity>> {
+    - _id : ObjectId
+    - bookingCode : String
+    - reservationCode : String
+    - guest.fullName : String
+    - guest.email : String
+    - occupantName : String
+    - roomTypeId : ObjectId
+    - checkInDate : Date
+    - checkOutDate : Date
+    - adults : Number
+    - children : Number
+    - status : BookingStatus
+    - totalAmount : Number
+    + findOne(filter) : Booking
+    + find(filter) : Query<Booking[]>
+    + populate(path) : Query<Booking[]>
+    + sort(order) : Query<Booking[]>
+}
+
+enum BookingStatus <<enumeration>> {
+    PENDING
+    CONFIRMED
+    CHECKED_IN
+    CHECKED_OUT
+    CANCELLED
+    NO_SHOW
+}
+
+
+UI ..> C : GET /api/bookings/lookup
+C ..> B
+B --> BookingStatus : status
+
+@enduml

@@ -1,0 +1,44 @@
+@startuml
+title CD-01 UC-M09 Update Room Info
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class RoomInventoryPage <<boundary>> {
+    + selectRoomToEdit(id)
+    + saveRoomInfo(roomNumber, floor, notes, version)
+}
+
+class RoomController <<boundary>> {
+    + getRoom(req, res)
+    + updateRoom(req, res)
+    + authenticate(req)
+    + requirePermission(permission)
+    + validateInput(input)
+}
+
+class Room <<entity>> {
+    - _id : ObjectId
+    - roomNumber : String
+    - floor : Number
+    - notes : String
+    - version : Number
+    - status : RoomStatus
+    + findById(id) : Room
+    + findOneAndUpdate(filter, update) : Room
+}
+
+enum RoomStatus <<enumeration>> {
+    VACANT_CLEAN
+    VACANT_DIRTY
+    OCCUPIED
+    INSPECTED
+    OUT_OF_ORDER
+}
+
+RoomInventoryPage ..> RoomController : GET /api/rooms/:id\nPATCH /api/rooms/:id
+RoomController ..> Room
+Room --> RoomStatus : status
+
+
+@enduml

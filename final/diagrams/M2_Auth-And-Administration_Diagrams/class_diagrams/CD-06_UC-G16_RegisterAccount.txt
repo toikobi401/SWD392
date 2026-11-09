@@ -1,0 +1,55 @@
+@startuml
+title CD-06 UC-G16 Register Account
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class RegisterPage <<boundary>> {
+    + submit(e)
+    + verify(token)
+}
+
+class AuthController <<boundary>> {
+    + register(req, res)
+    + verifyEmail(req, res)
+    + validateBody(rules)
+    + assertPasswordStrength(password)
+    + signVerificationToken(userId) : String
+    + record(entry)
+}
+
+class User <<entity>> {
+    - _id : ObjectId
+    - fullName : String
+    - email : String
+    - phone : String
+    - passwordHash : String
+    - status : AccountStatus
+    - roles : ObjectId[]
+    - emailVerifiedAt : Date
+    - userType : String
+    + findOne(filter) : Query<User>
+    + create(fields) : Promise<User>
+    + findByIdAndUpdate(id, update) : Query<User>
+}
+
+class EmailService <<external>> {
+    + sendVerificationLink(to, token)
+}
+
+enum AccountStatus <<enumeration>> {
+    PENDING_VERIFICATION
+    ACTIVE
+    LOCKED
+    DEACTIVATED
+}
+
+RegisterPage ..> AuthController : POST /api/auth/register\nGET /api/auth/verify?token=
+AuthController ..> User
+AuthController ..> EmailService : verification link
+User --> AccountStatus : status
+
+
+
+
+@enduml

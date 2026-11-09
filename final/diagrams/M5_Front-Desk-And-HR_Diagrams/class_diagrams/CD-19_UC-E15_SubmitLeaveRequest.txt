@@ -1,0 +1,53 @@
+@startuml
+title CD-19 UC-E15 Submit Leave Request
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class MyLeavePage <<boundary>> {
+    + submitLeave(type, fromDate, toDate, reason)
+    + onSuccess()
+}
+
+class LeaveController <<boundary>> {
+    + submit(req, res)
+    + authenticate(req, res, next)
+    + submit(command)
+    + countDays(fromDate, toDate) : Number
+    + record(entry)
+}
+
+class LeaveRequest <<entity>> {
+    - _id : ObjectId
+    - employeeId : ObjectId
+    - type : LeaveType
+    - fromDate : Date
+    - toDate : Date
+    - days : Number
+    - reason : String
+    - status : LeaveStatus
+    - createdAt : Date
+    + create(data) : LeaveRequest
+}
+
+enum LeaveType <<enumeration>> {
+    ANNUAL
+    SICK
+    UNPAID
+    MATERNITY
+}
+
+enum LeaveStatus <<enumeration>> {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+    ESCALATED
+}
+
+MyLeavePage ..> LeaveController : POST /api/leave-requests
+LeaveController ..> LeaveRequest
+LeaveRequest --> LeaveType
+LeaveRequest --> LeaveStatus
+
+@enduml

@@ -1,0 +1,91 @@
+@startuml
+title SD-05 UC-G17 Login
+
+actor "Guest" as G
+boundary "LoginPage" as UI
+boundary "AuthController" as C
+entity "User" as U
+database "MongoDB" as DB
+participant "Email service" as E
+
+
+G -> UI : submit(e) - enter email and password
+activate G
+activate UI
+UI -> C : POST /api/auth/login (email, password)\nlogin(req, res)
+activate C
+C -> C : validateBody(rules)
+alt missing, empty or non-string fields
+    C --> UI : 400 VALIDATION_ERROR
+    UI --> G : show field errors
+else whitespace-only email after normalization
+    C --> UI : 400 MISSING_CREDENTIALS
+    UI --> G : "Username and password must not be empty"
+else valid request
+    C -> U : findOne({ email }).select('+passwordHash').populate('roles')
+    activate U
+    U -> DB : query user and referenced roles
+    activate DB
+    DB --> U : user document with roles, or null
+    deactivate DB
+    U --> C : user or null
+    deactivate U
+
+    alt account not found
+        C -> C : record(LOGIN_FAILED)
+        C --> UI : 401 INVALID_CREDENTIALS
+        UI --> G : "Invalid username or password"
+    else status is LOCKED
+        C --> UI : 403 ACCOUNT_LOCKED
+        UI --> G : show locked account notice and reset-password link
+    else status is DEACTIVATED
+        C --> UI : 403 ACCOUNT_DEACTIVATED
+        UI --> G : show deactivated account error
+    else account can be checked
+        C -> U : verifyPassword(password)
+        activate U
+        U --> C : password matches or does not match
+        deactivate U
+        alt wrong password
+            opt failedLoginAttempts >= 5
+                C -> E : sendDecisionNotice(email, subject, body)
+                activate E
+                E --> C : accepted or delivery error (ignored)
+                deactivate E
+            end
+            C -> U : save()
+            activate U
+            U -> DB : persist failedLoginAttempts and status
+            activate DB
+            DB --> U : saved document
+            deactivate DB
+            U --> C : saved user
+            deactivate U
+            C -> C : record(LOGIN_FAILED or ACCOUNT_LOCKED)
+            C --> UI : 401 INVALID_CREDENTIALS
+            UI --> G : "Invalid username or password"
+        else correct password but PENDING_VERIFICATION
+            C --> UI : 403 EMAIL_NOT_VERIFIED
+            UI --> G : ask user to open the verification email
+        else correct password and ACTIVE
+            C -> U : save()
+            activate U
+            U -> DB : persist successful login fields
+            activate DB
+            DB --> U : saved document
+            deactivate DB
+            U --> C : saved user
+            deactivate U
+            C -> C : record(LOGIN_SUCCESS)
+            C -> C : issueTokens(user)
+            C --> UI : 200 OK (accessToken, refreshToken, user)
+            UI --> G : store tokens; redirect to requested page or homeFor(profile)
+        end
+    end
+end
+
+deactivate C
+deactivate UI
+deactivate G
+
+@enduml

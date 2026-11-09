@@ -1,0 +1,188 @@
+@startuml
+title SD-14 UC-R15 Process Payment
+
+actor "Receptionist" as R
+boundary "FolioPage" as UI
+boundary "FrontDeskController" as C
+entity "Folio" as F
+entity "Payment" as P
+database "MongoDB" as DB
+participant "payOS" as X
+
+
+loop each partial or split payment while balance remains
+    R -> UI : pay.mutate() with amount, method and attempt key
+    activate R
+    activate UI
+    UI -> C : POST /api/folios/:id/payments (amount, method, idempotencyKey)\ntakePayment(req, res)
+    activate C
+    C -> C : authenticate()
+    C -> C : requirePermission(PROCESS_PAYMENT)
+    C -> C : validateBody(amount >= 1, method)
+    alt invalid or expired authentication
+        C --> UI : 401 UNAUTHORIZED / INVALID_TOKEN / TOKEN_EXPIRED
+        UI --> R : show access error
+    else missing PROCESS_PAYMENT
+        C --> UI : 403 FORBIDDEN
+        UI --> R : show access error
+    else invalid body
+        C --> UI : 400 VALIDATION_ERROR
+        UI --> R : show field errors
+    else authorized valid request
+        C -> F : findById(folioId)
+        activate F
+        F -> DB : query folio
+        activate DB
+        DB --> F : folio or null
+        deactivate DB
+        F --> C : folio or null
+        deactivate F
+        alt folio missing
+            C --> UI : 404 NOT_FOUND
+            UI --> R : show folio not found
+        else folio is not OPEN
+            C --> UI : 409 FOLIO_CLOSED
+            UI --> R : show stay already checked out
+        else open folio
+            opt idempotencyKey supplied
+                C -> P : findOne({idempotencyKey})
+                activate P
+                P -> DB : query original attempt
+                activate DB
+                DB --> P : payment or null
+                deactivate DB
+                P --> C : payment or null
+                deactivate P
+            end
+            alt existing attempt found
+                C --> UI : 201 Created (original payment result, current balance)
+                UI --> R : show original result; no second charge
+            else amount exceeds folio.balance
+                C --> UI : 400 AMOUNT_EXCEEDS_BALANCE
+                UI --> R : reduce amount
+            else new payment attempt
+                C -> C : charge(command)\nrequire positive integer amount
+                alt fractional or nonpositive amount
+                    C --> UI : 400 INVALID_AMOUNT
+                    UI --> R : show invalid amount
+                else valid amount
+                    C -> P : findOne({idempotencyKey})
+                    activate P
+                    P -> DB : recheck supplied key or generated UUID
+                    activate DB
+                    DB --> P : payment or null
+                    deactivate DB
+                    P --> C : payment or null
+                    deactivate P
+                    alt another existing attempt found
+                    else new key
+                        opt method is CASH
+                            C -> C : charge(command)\nDrawerSession.findOne({cashierId, isOpen:true})
+                        end
+                        alt CASH has no open drawer
+                            C --> UI : 409 NO_OPEN_DRAWER
+                            UI --> R : open a cash drawer first
+                        else drawer valid or method is not CASH
+                            C -> P : create({bookingId, folioId, amount, method, status:PENDING,\nidempotencyKey, gatewayOrderCode, cashierId, drawerSessionId})
+                            activate P
+                            P -> DB : insert pending payment
+                            activate DB
+                            DB --> P : payment or write error
+                            deactivate DB
+                            P --> C : payment or write error
+                            deactivate P
+                            alt duplicate key / schema validation error
+                                C --> UI : 409 DUPLICATE_KEY / 400 VALIDATION_ERROR
+                                UI --> R : show error; keep attempt key for retry
+                            else payment created
+                                alt local method (CASH or VOUCHER)
+                                    C -> P : findOneAndUpdate({_id, status:PENDING},\n{$set:{status:PAID, gatewayRef:"LOCAL", paidAt:now}}, {new:true})
+                                    activate P
+                                    P -> DB : atomically settle local payment
+                                    activate DB
+                                    DB --> P : updated payment or null
+                                    deactivate DB
+                                    P --> C : updated payment or null
+                                    deactivate P
+                                    opt transition won
+                                        C -> F : findByIdAndUpdate(folioId, {$inc:{totalPayments:amount, balance:-amount}})
+                                        activate F
+                                        F -> DB : apply payment to folio once
+                                        activate DB
+                                        DB --> F : previous folio
+                                        deactivate DB
+                                        F --> C : previous folio
+                                        deactivate F
+                                        C -> C : transition(paymentId, true, "LOCAL")\nupdate drawer expectedCash if present; record PAYMENT_CAPTURED
+                                    end
+                                else gateway method (BANK_TRANSFER in UI)
+                                    C -> C : openPayOSLink(payments, options)
+                                    C -> X : charge(request)\nPOST /v2/payment-requests
+                                    activate X
+                                    X --> C : PENDING link / DECLINED / error
+                                    deactivate X
+                                    alt PENDING link created
+                                        C -> P : updateMany({gatewayOrderCode}, {$set:{checkoutUrl, qrCode}})
+                                        activate P
+                                        P -> DB : store checkout URL and VietQR
+                                        activate DB
+                                        DB --> P : update result
+                                        deactivate DB
+                                        P --> C : update result
+                                        deactivate P
+                                        C -> P : find({_id:{$in:paymentIds}}).sort({_id:1})
+                                        activate P
+                                        P -> DB : read payment with checkout details
+                                        activate DB
+                                        DB --> P : payments
+                                        deactivate DB
+                                        P --> C : payments
+                                        deactivate P
+                                    else GATEWAY_TIMEOUT (504 caught internally)
+                                    else DECLINED / GATEWAY_ERROR / CONFIG_ERROR
+                                        C -> P : findOneAndUpdate({_id, status:PENDING},\n{$set:{status:FAILED, gatewayMessage}}, {new:true})
+                                        activate P
+                                        P -> DB : mark failed attempt
+                                        activate DB
+                                        DB --> P : failed payment or null
+                                        deactivate DB
+                                        P --> C : failed payment or null
+                                        deactivate P
+                                        opt gateway threw instead of returning DECLINED
+                                            C --> UI : 502 GATEWAY_ERROR / 500 CONFIG_ERROR
+                                            UI --> R : show error; choose another method
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    opt payment returned without an uncaught error
+                        C -> F : findById(folioId)
+                        activate F
+                        F -> DB : read current balance
+                        activate DB
+                        DB --> F : folio
+                        deactivate DB
+                        F --> C : folio
+                        deactivate F
+                        C --> UI : 201 Created (paymentId, status, amount, balance,\norderCode, qrCode, checkoutUrl)
+                        alt PENDING with qrCode
+                            UI --> R : show VietQR; balance unchanged until settlement
+                            ref over UI, X
+                                PaymentController webhook/reconcile settlement: SD-13.
+                                A won PAID transition updates this folio balance.
+                            end ref
+                        else PAID / FAILED / PENDING without qrCode
+                            UI --> R : refresh folio and payment list; reset attempt key
+                        end
+                    end
+                end
+            end
+        end
+    end
+    deactivate C
+    deactivate UI
+    deactivate R
+end
+@enduml

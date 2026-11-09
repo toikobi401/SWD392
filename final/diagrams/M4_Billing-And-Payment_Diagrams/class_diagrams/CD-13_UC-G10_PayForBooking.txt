@@ -1,0 +1,67 @@
+@startuml
+title CD-13 UC-G10 Pay for Booking
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class PaymentResultPage <<boundary>> {
+    + check()
+}
+
+class PaymentController <<boundary>> {
+    + webhook(req, res)
+    + reconcile(req, res)
+    + verifyWebhook(body)
+    + confirmFromGateway(outcome)
+    + record(action)
+    + sendConfirmationOnce(orderCode)
+}
+
+class Payment <<entity>> {
+    - _id : ObjectId
+    - bookingId : ObjectId
+    - amount : Number
+    - method : PaymentMethod
+    - status : PaymentStatus
+    - idempotencyKey : String
+    - gatewayRef : String
+    - gatewayMessage : String
+    - gatewayOrderCode : Number
+    - checkoutUrl : String
+    - qrCode : String
+    - expiresAt : Date
+    - notifiedAt : Date
+    - paidAt : Date
+    + find(filter) : Query<Payment[]>
+    + findOneAndUpdate(filter, update, options) : Payment
+    + findById(id) : Payment
+}
+
+class PayOS <<external>> {
+    + getStatus(orderCode)
+}
+
+enum PaymentStatus <<enumeration>> {
+    PENDING
+    PAID
+    FAILED
+    REVERSED
+}
+
+enum PaymentMethod <<enumeration>> {
+    CARD
+    CASH
+    BANK_TRANSFER
+    E_WALLET
+    VOUCHER
+    LOYALTY_POINTS
+}
+
+PaymentResultPage ..> PaymentController : GET /api/payments/payos/:orderCode/reconcile
+PaymentController ..> Payment
+PaymentController ..> PayOS
+PayOS ..> PaymentController : POST /api/payments/payos/webhook
+Payment --> PaymentStatus
+Payment --> PaymentMethod
+
+@enduml

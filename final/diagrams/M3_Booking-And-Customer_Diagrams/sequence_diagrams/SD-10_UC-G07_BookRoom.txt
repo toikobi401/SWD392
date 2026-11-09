@@ -1,0 +1,132 @@
+@startuml
+title SD-10 UC-G07 Book Room
+
+actor "Guest" as G
+boundary "BookingWizardPage" as UI
+boundary "BookingController" as C
+entity "Booking" as B
+database "MongoDB" as DB
+participant "payOS" as P
+
+G -> UI : toReview(e)
+activate G
+activate UI
+alt no room selections
+    UI --> G : "Choose your rooms first"
+else room without an adult or over capacity
+    UI --> G : show per-room problems; disable Continue
+else wizard countdown expired
+    UI --> G : "The 15-minute hold has ended. Search again."
+else valid details
+    UI --> G : show contact details, rooms, voucher discount, VAT and total
+    opt signed-in Customer uses the same page
+        UI --> G : prefill contact details from profile
+    end
+end
+deactivate UI
+deactivate G
+
+G -> UI : book.mutate()
+activate G
+activate UI
+UI -> C : POST /api/bookings (rooms, dates, guest, voucherCode, paymentMethod)\ncreate(req, res)
+activate C
+C -> C : create(req, res)\noptionalAuth; validateBody; normalizeRooms; validateDates;\ncheck active room types, adults, capacity and online payment method
+
+alt invalid body, dates, room count or occupancy
+    C --> UI : 400 VALIDATION_ERROR / INVALID_DATE / STAY_TOO_LONG /\nNO_ROOMS / TOO_MANY_ROOMS / ADULT_REQUIRED / CAPACITY_EXCEEDED
+    UI --> G : show validation error; correct details
+else unsupported online payment method
+    C --> UI : 400 INVALID_PAYMENT_METHOD
+    UI --> G : select an accepted online method
+else room type unavailable
+    C --> UI : 404 ROOM_TYPE_NOT_FOUND
+    UI --> G : choose another room type
+else valid room request
+    opt voucherCode supplied
+        C -> C : create(req, res)\nresolve(voucherCode, Infinity): check active dates and usage
+    end
+    alt voucher rejected
+        C --> UI : 400 INVALID_VOUCHER
+        UI --> G : show reason; remove or change voucher
+    else voucher accepted or absent
+        loop each requested room, stop if a hold fails
+            C -> C : create(req, res)\nhold(roomTypeId, checkInDate, checkOutDate, 1):\nrecheck availability and create a 15-minute inventory hold
+        end
+        alt any room cannot be held
+            C -> C : create(req, res)\nreleaseHold for every hold already created
+            C --> UI : 409 NO_AVAILABILITY
+            UI --> G : show remaining room count; search again
+        else all rooms held
+            C -> C : create(req, res)\nresolveAddOns; calculate prices; recheck voucher minimum spend;\nspread discount proportionally; compute VAT per room
+            alt add-on unavailable or voucher minimum spend not met
+                C -> C : create(req, res)\nreleaseHold for all rooms
+                C --> UI : 400 SERVICE_NOT_FOUND / VOUCHER_MIN_SPEND
+                UI --> G : show error; change selection or voucher
+            else pricing accepted
+                C -> B : create(pricedBookings)
+                activate B
+                B -> DB : insert one PENDING booking per room with shared reservationCode
+                activate DB
+                alt invalid guest/schema fields or duplicate booking code
+                    DB --> B : validation or duplicate key error
+                    B --> C : error
+                else created
+                    DB --> B : booking documents
+                    B --> C : bookings
+                end
+                deactivate DB
+                deactivate B
+                alt creation failed
+                    C -> C : create(req, res)\nreleaseHold for all rooms
+                    C --> UI : 400 VALIDATION_ERROR / 409 DUPLICATE_KEY
+                    UI --> G : show error; correct details or retry
+                else bookings created
+                    C -> C : create(req, res)\nrecord BOOKING_CREATED; chargeReservation:\ncreate per-room PENDING payments with one orderCode;\nset link expiry one minute before holds expire
+                    C -> P : POST /v2/payment-requests\ncharge(request): total, room items, buyer, signature, returnUrl, cancelUrl
+                    activate P
+                    alt link accepted
+                        P --> C : code "00", checkoutUrl, qrCode, paymentLinkId
+                    else link rejected
+                        P --> C : code other than "00" (DECLINED)
+                    else request times out
+                        P --> C : no response; proxy raises GATEWAY_TIMEOUT
+                    else gateway unreachable
+                        P --> C : transport failure; proxy raises GATEWAY_ERROR
+                    end
+                    deactivate P
+                    alt link rejected or gateway unreachable
+                        C -> C : create(req, res)\nmark payments FAILED; abandon each booking:\nstatus = CANCELLED, cancelledAt = now,\ncancellationReason = "Payment not completed"
+                        loop each created booking
+                            C -> B : save()
+                            activate B
+                            B -> DB : persist cancelled booking
+                            activate DB
+                            DB --> B : saved document
+                            deactivate DB
+                            B --> C : booking
+                            deactivate B
+                        end
+                        C -> C : create(req, res)\nreleaseHold for all rooms
+                        C --> UI : 402 PAYMENT_DECLINED / 502 GATEWAY_ERROR
+                        UI --> G : show error; retry booking
+                    else link accepted or timeout retained as pending
+                        C -> C : create(req, res)\nstore checkout URL when available; link holds to booking ids
+                        C --> UI : 202 Accepted (reservationCode, bookingCode, status: PENDING,\nrooms, total, paymentUrl, paymentPending: true, checkIn, checkOut)
+                        alt paymentUrl exists
+                            UI --> G : redirect browser to paymentUrl (payOS checkout)
+                        else gateway timed out; no paymentUrl
+                            UI --> G : navigate to /booking/lookup?code=reservationCode&email=guest.email
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+deactivate C
+deactivate UI
+deactivate G
+
+@enduml
