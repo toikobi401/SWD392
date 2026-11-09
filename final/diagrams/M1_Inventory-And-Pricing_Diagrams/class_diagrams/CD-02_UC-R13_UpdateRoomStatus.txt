@@ -1,0 +1,54 @@
+@startuml
+title CD-02 UC-R13 Update Room Status
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class RoomRackPage <<boundary>> {
+    + onAction(event, notes)
+}
+
+class FrontDeskController <<boundary>> {
+    + updateRoomStatus(req, res)
+    + authenticate(req)
+    + requirePermission(permission)
+    + next(current, event) : RoomStatus
+}
+
+class Room <<entity>> {
+    - _id : ObjectId
+    - roomNumber : String
+    - status : RoomStatus
+    - notes : String
+    - version : Number
+    + findById(roomId) : Room
+    + findOneAndUpdate(filter, update, options) : Room
+}
+
+enum RoomStatus <<enumeration>> {
+    VACANT_CLEAN
+    VACANT_DIRTY
+    OCCUPIED
+    INSPECTED
+    OUT_OF_ORDER
+}
+
+RoomRackPage ..> FrontDeskController : PATCH /api/rooms/:id/status
+FrontDeskController ..> Room
+Room --> RoomStatus : status
+
+note bottom of RoomRackPage
+    onAction is the page callback that invokes
+    update.mutate({ event, notes }).
+    The room rack is already loaded (UC-R12).
+end note
+
+note bottom of FrontDeskController
+    Middleware and RoomStatusService.apply logic
+    are folded into this boundary; next is the
+    RoomStateMachine.next operation, not a new endpoint.
+    ASSIGN and CHECK_OUT are rejected with 400 USE_CHECK_IN_OUT.
+    IllegalStateTransitionError currently maps to
+    500 INTERNAL_ERROR in errorHandler.
+end note
+@enduml

@@ -1,0 +1,69 @@
+@startuml
+title SD-19 UC-E15 Submit Leave Request
+
+actor "Employee" as A
+boundary "MyLeavePage" as UI
+boundary "LeaveController" as C
+entity "LeaveRequest" as L
+database "MongoDB" as DB
+
+note over UI, C
+    StaffPages.tsx: submit mutation sends the leave form.
+    Scope is submission; listing and cancellation are separate interactions.
+    This route authenticates only; no permission middleware is configured.
+end note
+
+A -> UI : submitLeave(type, fromDate, toDate, reason)
+activate A
+activate UI
+UI -> C : POST /api/leave-requests\nsubmit(req, res): type, fromDate, toDate, reason
+activate C
+C -> C : authenticate(req, res, next)
+alt missing, expired or invalid token
+    C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN
+    UI --> A : show authentication error
+else authenticated
+    C -> C : submit(command)
+    note right of C
+        employeeId = req.auth.sub; parse dates.
+        Reject toDate earlier than fromDate.
+    end note
+    alt toDate < fromDate
+        C --> UI : 400 INVALID_RANGE
+        UI --> A : end date must not precede start date
+    else date order accepted
+        C -> C : countDays(fromDate, toDate)
+        note right of C : days = floor((toDate - fromDate) / 86400000) + 1
+        C -> L : create({employeeId, type, fromDate, toDate, days, reason, status: PENDING})
+        activate L
+        alt Mongoose validation fails (type, date, required field or days)
+            L --> C : ValidationError
+            C --> UI : 400 VALIDATION_ERROR
+            UI --> A : show validation error; correct form
+        else schema accepts request
+            L -> DB : insert leave request
+            activate DB
+            DB --> L : created document
+            deactivate DB
+            L --> C : leave request
+            C -> C : record(LEAVE_REQUESTED)
+            C --> UI : 201 Created (LeaveRequest, status = PENDING)
+            UI -> UI : onSuccess()
+            note right of UI
+                Clear reason and invalidate the my-leave query.
+                The existing list reloads through the separate mine endpoint.
+            end note
+            UI --> A : show submitted request in leave list
+        end
+        deactivate L
+    end
+end
+deactivate C
+deactivate UI
+deactivate A
+
+note over UI, C
+    No balance, overlap, coverage or advance-notice check occurs at submission.
+    The code records an audit entry but sends no email for this use case.
+end note
+@enduml

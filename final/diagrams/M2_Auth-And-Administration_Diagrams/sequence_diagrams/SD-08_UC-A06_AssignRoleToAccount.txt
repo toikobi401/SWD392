@@ -1,0 +1,150 @@
+@startuml
+title SD-08 UC-A06 Assign Role to Account
+
+actor "Admin" as A
+boundary "AccountsPage" as UI
+boundary "AccountController" as C
+entity "User" as U
+entity "Role" as R
+database "MongoDB" as DB
+participant "Email service" as E
+
+note over UI, C
+    Precondition: UC-A01 loaded the account; UC-A05 loaded the role catalogue.
+    AccountsPage includes its AccountDrawer: held roles and GUEST are filtered out.
+    Service, middleware and audit logic is folded into Controller.
+end note
+
+A -> UI : assignRole(id, roleId) - select a role and click Add
+activate A
+activate UI
+UI -> C : POST /api/accounts/:id/roles (roleId, expiresAt?, reason?)\nassignRole(req, res)
+activate C
+C -> C : authenticate(req, res, next)
+alt missing bearer token
+    C --> UI : 401 UNAUTHORIZED
+    UI --> A : show authentication error
+else expired or invalid bearer token
+    C --> UI : 401 TOKEN_EXPIRED / INVALID_TOKEN
+    UI --> A : refresh session or show authentication error
+else valid token
+    C -> C : requirePermission(MANAGE_ROLES)
+    alt permission missing
+        C --> UI : 403 FORBIDDEN
+        UI --> A : show missing permission error
+    else authorized
+        note right of C : The following three queries run in Promise.all in the service.
+        C -> U : findById(userId).populate('roles')
+        activate U
+        U -> DB : query target user and referenced roles
+        activate DB
+        DB --> U : target document with roles or null
+        deactivate DB
+        U --> C : target user or null
+        deactivate U
+
+        C -> R : findById(roleId)
+        activate R
+        R -> DB : query role by _id
+        activate DB
+        DB --> R : role document or null
+        deactivate DB
+        R --> C : role or null
+        deactivate R
+
+        C -> U : findById(actorId).populate('roles')
+        activate U
+        U -> DB : query acting administrator and referenced roles
+        activate DB
+        DB --> U : actor document with roles or null
+        deactivate DB
+        U --> C : actor or null
+        deactivate U
+
+        alt target account, role or acting administrator not found
+            C --> UI : 404 NOT_FOUND
+            UI --> A : show which resource was not found
+        else target status is not ACTIVE
+            C --> UI : 409 ACCOUNT_INACTIVE
+            UI --> A : require account reactivation
+        else target already holds roleId
+            C --> UI : 409 ALREADY_ASSIGNED
+            UI --> A : "This account already holds that role"
+        else candidate assignment
+            C -> C : assertNoPrivilegeEscalation(actor, role, actorId)
+            alt granting SUPER_ADMIN without being SUPER_ADMIN
+                C -> C : record(PRIVILEGE_ESCALATION_BLOCKED)
+                C --> UI : 403 PRIVILEGE_ESCALATION
+                UI --> A : show authority error
+            else permitted authority
+                C -> C : assertNoSegregationConflict(current, role)
+                alt resulting roles include both ADMIN and MANAGER
+                    C --> UI : 409 SEGREGATION_OF_DUTIES
+                    UI --> A : show conflicting roles
+                else assignment allowed
+                    note right of C : Append role._id to user.roles.
+                    C -> U : save()
+                    activate U
+                    U -> DB : persist updated roles array
+                    activate DB
+                    DB --> U : saved document
+                    deactivate DB
+                    U --> C : saved user
+                    deactivate U
+
+                    C -> U : findByIdAndUpdate(userId, { $set: { sessionsInvalidatedAt: now } })
+                    activate U
+                    U -> DB : request session invalidation timestamp update
+                    activate DB
+                    DB --> U : update result
+                    deactivate DB
+                    U --> C : result ignored
+                    deactivate U
+                    note over C, U
+                        invalidateSessions is a stub. sessionsInvalidatedAt is
+                        absent from the schema and authenticate does not check it.
+                        Existing JWTs are not immediately revoked.
+                    end note
+
+                    opt expiresAt or reason supplied through the API
+                        note right of C
+                            Include expiresAt and reason in audit metadata.
+                            No expiry field, scheduler or effective-date support exists.
+                        end note
+                    end
+                    C -> C : record(ROLE_ASSIGNED)
+                    C -> E : sendDecisionNotice(email, subject, body)
+                    activate E
+                    E --> C : accepted or delivery error (ignored)
+                    deactivate E
+
+                    C -> U : findById(userId).populate('roles')
+                    activate U
+                    U -> DB : reload user and role permissions
+                    activate DB
+                    DB --> U : user with populated roles
+                    deactivate DB
+                    U --> C : user with roles
+                    deactivate U
+                    note right of C : Effective permissions are the union of role.permissions.
+                    C --> UI : 200 OK (id, roles, effectivePermissions)
+                    UI --> A : clear role selection and refresh accounts
+                end
+            end
+        end
+    end
+end
+
+deactivate C
+deactivate UI
+deactivate A
+
+note over UI, C
+    assignRole is the existing adminApi method used by AccountDrawer's mutation.
+    Initial provisioning invokes the same assignment service (UC-A02).
+    Revoke and LAST_SUPER_ADMIN belong to UC-A08, not this POST.
+    replace() calls revoke then assign; it has no route and is not atomic.
+    Permission preview/confirmation and automatic expiry are spec-only.
+    Email operations use NotificationProxy; development may log the notice.
+end note
+@enduml

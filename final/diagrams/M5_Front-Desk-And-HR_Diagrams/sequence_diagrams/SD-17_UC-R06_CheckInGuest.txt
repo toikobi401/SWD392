@@ -1,0 +1,152 @@
+@startuml
+title SD-17 UC-R06 Check In Guest
+
+actor "Receptionist" as A
+boundary "StaffBookingPage" as UI
+boundary "FrontDeskController" as C
+entity "Booking" as B
+entity "Room" as R
+database "MongoDB" as DB
+
+note over UI, C
+    DeskPages.tsx: StaffBookingPage contains CheckInPanel.
+    Booking search/detail is a precondition (UC-R01/R02).
+    Service, rule and supporting persistence steps are folded into C.
+end note
+
+A -> UI : openCheckIn(booking)
+activate A
+activate UI
+UI -> C : GET /api/front-desk/allocatable?roomTypeId=...\nallocatableRooms(req, res)
+activate C
+C -> C : authenticate(req, res, next)
+C -> C : requirePermission(CHECK_IN)
+alt missing, expired or invalid token
+    C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN
+    UI --> A : show authentication error
+else missing CHECK_IN permission
+    C --> UI : 403 FORBIDDEN
+    UI --> A : show access error
+else authorized
+    C -> R : find({roomTypeId, status: VACANT_CLEAN, floor?})\n.sort({floor: 1, roomNumber: 1})
+    activate R
+    R -> DB : query vacant-clean rooms of requested type
+    activate DB
+    DB --> R : room documents
+    deactivate DB
+    R --> C : rooms
+    deactivate R
+    C --> UI : 200 OK ({rooms: [{id, roomNumber, floor, status, version}]})
+    alt no rooms returned
+        UI --> A : show no clean room available; refresh when ready
+    else rooms available
+        UI --> A : show identity form and selectable rooms with versions
+    end
+end
+deactivate C
+deactivate UI
+deactivate A
+
+loop each room booking selected for check-in; retry after ROOM_TAKEN
+    A -> UI : submitCheckIn(identity, roomId, roomVersion)
+    activate A
+    activate UI
+    opt arrival before booking checkInDate
+        UI --> A : show early-arrival warning (no automatic surcharge)
+    end
+    UI -> C : POST /api/front-desk/check-in\ncheckIn(req, res): bookingId, identity, roomId, roomVersion
+    activate C
+    C -> C : authenticate(req, res, next)
+    C -> C : requirePermission(CHECK_IN)
+    C -> C : validateBody(bookingId, roomId, roomVersion)
+    alt authentication or permission failure
+        C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN or 403 FORBIDDEN
+        UI --> A : show access error
+    else required field missing or invalid roomVersion
+        C --> UI : 400 VALIDATION_ERROR
+        UI --> A : show field errors
+    else valid request
+        C -> B : findById(bookingId)
+        activate B
+        B -> DB : query booking by _id
+        activate DB
+        DB --> B : booking document or null
+        deactivate DB
+        B --> C : booking or null
+        deactivate B
+        alt booking not found
+            C --> UI : 404 BOOKING_NOT_FOUND
+            UI --> A : show error; search again or create walk-in booking separately
+        else booking.status != CONFIRMED
+            C --> UI : 409 CANNOT_CHECK_IN
+            UI --> A : show invalid booking state
+        else confirmed booking
+            C -> C : verifyIdentity(identity, booking)
+            alt identity.expiryDate is in the past
+                C --> UI : 400 ID_EXPIRED
+                UI --> A : show expired document error
+            else guest age is below 18
+                C --> UI : 403 UNDERAGE_GUEST
+                UI --> A : show minimum age error
+            else normalized name matches neither occupantName nor guest.fullName
+                C --> UI : 403 IDENTITY_MISMATCH
+                UI --> A : show identity mismatch error
+            else identity accepted
+                C -> R : findOneAndUpdate({_id: roomId, status: VACANT_CLEAN, version: roomVersion},\n{$set: {status: OCCUPIED}, $inc: {version: 1}}, {new: true})
+                activate R
+                R -> DB : atomically claim room using status and version
+                activate DB
+                DB --> R : updated room document or null
+                deactivate DB
+                R --> C : room or null
+                deactivate R
+                alt room no longer matches status/version
+                    C --> UI : 409 ROOM_TAKEN
+                    UI -> UI : onError(error)
+                    note right of UI
+                        Clear selected room and refetch allocatable rooms
+                        using the GET flow above before another attempt.
+                    end note
+                    UI --> A : this room has just been taken; choose another
+                else room claimed
+                    opt allocated roomTypeId differs from booking.roomTypeId
+                        C -> C : record(ROOM_UPGRADE_APPLIED)
+                        note right of C : API supports this audit; current UI lists only the booked type.
+                    end
+                    C -> B : save()
+                    activate B
+                    B -> DB : set status = CHECKED_IN, roomId, actualCheckInAt
+                    activate DB
+                    DB --> B : saved booking
+                    deactivate DB
+                    B --> C : booking
+                    deactivate B
+                    C -> B : nights()
+                    activate B
+                    B --> C : stay length in nights
+                    deactivate B
+                    C -> C : checkIn(command)
+                    note right of C
+                        Remaining coordinator steps: create OPEN folio,
+                        store depositAmount (defaults to 0), post room/services
+                        net charge and VAT, credit PAID prepayments.
+                    end note
+                    C -> C : record(GUEST_CHECKED_IN)
+                    C --> UI : 200 OK (bookingCode, status, roomNumber, folioId, checkedInAt)
+                    UI -> UI : onSuccess(result)
+                    UI --> A : refresh booking; hand over key and obtain registration signature
+                end
+            end
+        end
+    end
+    deactivate C
+    deactivate UI
+    deactivate A
+end
+
+note over UI, C
+    Code does not enforce settlement before check-in, charge early arrivals,
+    manage waiting lists, or print registration cards. Walk-in creation and
+    payment collection are separate use cases. No external call occurs here.
+end note
+@enduml

@@ -1,0 +1,143 @@
+@startuml
+title SD-18 UC-R09 Check Out Guest
+
+actor "Receptionist" as A
+boundary "StaffBookingPage" as UI
+boundary "FrontDeskController" as C
+entity "Folio" as F
+entity "Room" as R
+database "MongoDB" as DB
+
+note over UI, C
+    DeskPages.tsx: StaffBookingPage contains CheckOutPanel.
+    In-house booking and folio reference are already displayed.
+    Supporting Booking, Charge, Invoice, Task and loyalty persistence
+    is folded into coordinator self-messages on C.
+end note
+
+loop check-out attempt; retry after separate folio settlement if necessary
+    A -> UI : submitCheckOut(lateCheckoutSurcharge, waiveSurcharge)
+    activate A
+    activate UI
+    UI -> C : POST /api/front-desk/check-out\ncheckOut(req, res): bookingId, lateCheckoutSurcharge, waiveSurcharge
+    activate C
+    C -> C : authenticate(req, res, next)
+    C -> C : requirePermission(CHECK_OUT)
+    C -> C : validateBody(bookingId)
+    alt authentication or permission failure
+        C --> UI : 401 UNAUTHORIZED / TOKEN_EXPIRED / INVALID_TOKEN or 403 FORBIDDEN
+        UI --> A : show access error
+    else bookingId missing or not a string
+        C --> UI : 400 VALIDATION_ERROR
+        UI --> A : show field error
+    else valid request
+        C -> C : checkOut(command)
+        note right of C
+            Load Booking.findById(bookingId).
+            Require BookingStateMachine.can(status, CHECK_OUT).
+        end note
+        alt booking not found
+            C --> UI : 404 BOOKING_NOT_FOUND
+            UI --> A : show booking not found
+        else booking.status != CHECKED_IN
+            C --> UI : 409 CANNOT_CHECK_OUT
+            UI --> A : show invalid booking state
+        else in-house booking
+            C -> F : findOne({bookingId: booking._id})
+            activate F
+            F -> DB : query folio for booking
+            activate DB
+            DB --> F : folio document or null
+            deactivate DB
+            F --> C : folio or null
+            deactivate F
+            alt folio not found
+                C --> UI : 404 FOLIO_NOT_FOUND
+                UI --> A : show missing folio error
+            else folio found
+                opt lateCheckoutSurcharge is nonzero and waiveSurcharge is false
+                    C -> C : checkOut(command)
+                    note right of C
+                        Charge.exists checks for an existing
+                        Late check-out surcharge line on this folio.
+                        A retry must not post the charge twice.
+                    end note
+                    opt surcharge has not already been posted
+                        C -> C : post(folioId, surchargeLine, receptionistId)
+                        note right of C : Create surcharge and VAT Charge lines; compute net and tax.
+                        C -> F : findByIdAndUpdate(folioId,\n{$inc: {totalCharges: net + tax, balance: net + tax}})
+                        activate F
+                        F -> DB : increment folio charges and balance
+                        activate DB
+                        DB --> F : previous folio document
+                        deactivate DB
+                        F --> C : folio
+                        deactivate F
+                    end
+                end
+                C -> F : findById(folio._id)
+                activate F
+                F -> DB : reload balance after any ledger posting
+                activate DB
+                DB --> F : current folio document
+                deactivate DB
+                F --> C : current folio
+                deactivate F
+                alt current.balance - current.depositHeld > 0
+                    C --> UI : 402 OUTSTANDING_BALANCE
+                    UI --> A : open folio payment link, settle separately, then retry check-out
+                else deposit covers the balance or no balance remains
+                    C -> C : checkOut(command)
+                    note right of C
+                        Read undisputed Charge lines; sum net and TAX separately.
+                        Generate sequential invoice number; Invoice.create.
+                        Set booking CHECKED_OUT and actualCheckOutAt; save booking.
+                    end note
+                    C -> F : updateOne({_id: folio._id},\n{$set: {status: CLOSED, closedAt: now}})
+                    activate F
+                    F -> DB : close folio without overwriting ledger values
+                    activate DB
+                    DB --> F : update result
+                    deactivate DB
+                    F --> C : update result
+                    deactivate F
+                    opt booking.roomId exists
+                        C -> R : findByIdAndUpdate(booking.roomId,\n{$set: {status: VACANT_DIRTY}, $inc: {version: 1}}, {new: true})
+                        activate R
+                        R -> DB : release room to housekeeping
+                        activate DB
+                        DB --> R : updated room document or null
+                        deactivate DB
+                        R --> C : room or null
+                        deactivate R
+                        C -> C : checkOut(command)
+                        note right of C : Task.create: high-priority cleaning task for this room.
+                    end
+                    opt booking.customerId exists
+                        C -> C : checkOut(command)
+                        note right of C
+                            LoyaltyAccount.findOneAndUpdate with upsert:
+                            increment pointBalance and lifetimePoints
+                            by floor(booking.subtotal * 0.01).
+                        end note
+                    end
+                    C -> C : record(GUEST_CHECKED_OUT)
+                    C --> UI : 200 OK (bookingCode, status, invoiceNumber, total, checkedOutAt)
+                    UI --> A : show invoice number/total and room released for cleaning
+                end
+            end
+        end
+    end
+    deactivate C
+    deactivate UI
+    deactivate A
+end
+
+note over UI, C
+    Code gates on balance minus deposit but does not zero the balance,
+    apply/refund the deposit, or remove disputed amounts from that gate.
+    Invoice lines exclude disputes. Payment is UC-R15; no gateway/email
+    call occurs here. Early-departure repricing, express/corporate billing,
+    invoice email and review invitation are not implemented in this flow.
+end note
+@enduml

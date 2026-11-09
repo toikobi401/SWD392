@@ -1,0 +1,66 @@
+@startuml
+title CD-05 UC-G17 Login
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class LoginPage <<boundary>> {
+    + submit(e)
+}
+
+class AuthController <<boundary>> {
+    + login(req, res)
+    + validateBody(rules)
+    + record(entry)
+    + issueTokens(user) : AuthTokens
+}
+
+class User <<entity>> {
+    - _id : ObjectId
+    - email : String
+    - fullName : String
+    - passwordHash : String
+    - status : AccountStatus
+    - roles : ObjectId[]
+    - failedLoginAttempts : Number
+    - lastLoginAt : Date
+    + findOne(filter) : Query<User>
+    + select(fields) : Query<User>
+    + populate(path) : Query<User>
+    + verifyPassword(plain) : Promise<Boolean>
+    + save() : Promise<User>
+}
+
+class EmailService <<external>> {
+    + sendDecisionNotice(to, subject, body)
+}
+
+enum AccountStatus <<enumeration>> {
+    PENDING_VERIFICATION
+    ACTIVE
+    LOCKED
+    DEACTIVATED
+}
+
+LoginPage ..> AuthController : POST /api/auth/login
+AuthController ..> User
+AuthController ..> EmailService : lockout notice
+User --> AccountStatus : status
+
+note bottom of AuthController
+    Service and middleware operations are folded into this boundary
+    to match SD-05. record() summarizes AuditService.record().
+    issueTokens() issues a 15-minute access token and 7-day refresh token.
+end note
+
+note bottom of User
+    select() and populate() are Mongoose query-chain operations.
+    roles references Role documents; population is included in findOne().
+    This use-case view retains the assigned User model boundary.
+end note
+
+note bottom of EmailService
+    NotificationProxy.sendDecisionNotice() represents this external call.
+    Development without a configured provider logs the email.
+end note
+@enduml

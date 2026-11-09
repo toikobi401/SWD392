@@ -1,0 +1,75 @@
+@startuml
+title SD-04 UC-G11 Apply Discount Code
+
+actor "Guest" as G
+boundary "BookingWizardPage" as UI
+boundary "PromotionController" as C
+entity "Promotion" as P
+database "MongoDB" as DB
+
+G -> UI : applyCode(code)
+activate G
+activate UI
+note right of UI
+    Review step: subtotal is the whole reservation before tax.
+    applyCode trims and uppercases the code.
+    Empty input disables Apply and sends no request.
+end note
+
+opt nonempty code submitted
+    UI -> C : GET /api/promotions/validate?code=&subtotal=\nvalidate(req, res)
+    activate C
+
+    alt code missing or subtotal non-finite or negative
+        C --> UI : 400 VALIDATION_ERROR
+        UI --> G : show "code and subtotal are required"
+    else valid query
+        opt trimmed uppercase code is nonempty
+            C -> P : findOne({code: normalized})
+            activate P
+            P -> DB : query promotion by normalized code
+            activate DB
+            DB --> P : promotion document or null
+            deactivate DB
+            P --> C : promotion or null
+            deactivate P
+        end
+
+        C -> C : applicability(promotion, subtotal, now)
+        alt no matching promotion or whitespace-only code
+            C --> UI : 400 INVALID_VOUCHER (reason: NOT_FOUND)
+            UI --> G : show "We do not recognise this voucher code"
+        else promotion is inactive
+            C --> UI : 400 INVALID_VOUCHER (reason: INACTIVE)
+            UI --> G : show "This voucher is no longer available"
+        else now is before validFrom
+            C --> UI : 400 INVALID_VOUCHER (reason: SCHEDULED)
+            UI --> G : show "This voucher cannot be used yet"
+        else now is after validTo
+            C --> UI : 400 INVALID_VOUCHER (reason: EXPIRED)
+            UI --> G : show "This voucher has expired"
+        else usageLimit > 0 and usedCount >= usageLimit
+            C --> UI : 400 INVALID_VOUCHER (reason: USED_UP)
+            UI --> G : show "This voucher has reached its usage limit"
+        else subtotal < minimumSpend
+            C --> UI : 400 VOUCHER_MIN_SPEND (reason: MIN_SPEND)
+            UI --> G : show required minimum spend before tax
+        else applicable promotion
+            C -> C : discountFor(promotion, subtotal)
+            note right of C
+                PERCENTAGE: round(subtotal * discountValue / 100).
+                FIXED_AMOUNT: discountValue.
+                Cap the discount at subtotal.
+                The preview does not increment usedCount.
+            end note
+            C --> UI : 200 OK ({code, description, discountType,\ndiscountValue, minimumSpend, discount})
+            UI --> G : show applied code; recalculate room discounts,\nVAT per room and reservation total
+        end
+    end
+
+    deactivate C
+end
+
+deactivate UI
+deactivate G
+@enduml

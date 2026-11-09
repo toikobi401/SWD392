@@ -33,9 +33,10 @@ Mỗi người: **4 use case**, mỗi use case vẽ **1 class diagram (CD) + 1 s
   - Quan hệ: Page ⇢ Controller (dependency, gọi API) · Controller ⇢ Model (dependency) · giữa các Model dùng association có multiplicity.
   - Không vẽ lại toàn bộ subsystem — 9 class diagram subsystem đã có trong `diagrams/class_diagrams/`.
 - [ ] **Định dạng**: PlantUML `.txt` (import vào Visual Paradigm), xuất thêm ảnh `.png` để chèn SDS.
-- [ ] **Tên file**:
-  - Class: `diagrams/class_diagrams/uc/CD-xx_UC-yyy_<TenUC>.txt`
-  - Sequence: `diagrams/sequence_diagrams/SD-xx_UC-yyy_<TenUC>.txt`
+- [ ] **Thư mục & tên file** — mỗi thành viên một thư mục `final/diagrams/Mx_<Subsystem>_Diagrams/`:
+  - Class: `class_diagrams/CD-xx_UC-yyy_<TenUC>.txt` (+ `.png`)
+  - Sequence: `sequence_diagrams/SD-xx_UC-yyy_<TenUC>.txt` (+ `.png`)
+  - Thư mục: `M1_Inventory-And-Pricing_Diagrams` · `M2_Auth-And-Administration_Diagrams` · `M3_Booking-And-Customer_Diagrams` · `M4_Billing-And-Payment_Diagrams` · `M5_Front-Desk-And-HR_Diagrams`
 - [ ] **Ngôn ngữ trong diagram**: tiếng Anh (khớp tên class/route trong code).
 
 Cột **Nguồn**:
@@ -51,10 +52,10 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [ ] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – RoomController – Room | `getRoom`, `updateRoom` (mới) | thiết kế (SD đã vẽ `.drawio` + `.txt`) |
-| [ ] | [ ] | 02 | UC-R13 Update Room Status | RoomRackPage – FrontDeskController – Room | `updateRoomStatus` | code |
-| [ ] | [ ] | 03 | UC-M20 Create Promotion Code | PromotionsPage – PromotionController – Promotion | `create` | code + spec (UC-M11) |
-| [ ] | [ ] | 04 | UC-G11 Apply Discount Code | BookingWizardPage – PromotionController – Promotion | `validate` | code |
+| [x] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – RoomController – Room | `getRoom`, `updateRoom` (mới) | thiết kế (SD đã vẽ `.drawio` + `.txt`) |
+| [x] | [x] | 02 | UC-R13 Update Room Status | RoomRackPage – FrontDeskController – Room | `updateRoomStatus` | code |
+| [x] | [x] | 03 | UC-M20 Create Promotion Code | PromotionsPage – PromotionController – Promotion | `create` | code + spec (UC-M11) |
+| [x] | [x] | 04 | UC-G11 Apply Discount Code | BookingWizardPage – PromotionController – Promotion | `validate` | code |
 
 **Đặc tả UC cần viết thêm**: [x] UC-M09 (thiết kế trong SD-01) · [ ] UC-R13 · [ ] UC-G11
 
@@ -64,10 +65,10 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [ ] | [ ] | 05 | UC-G17 Login | LoginPage – AuthController – User | `login` | code + spec |
-| [ ] | [ ] | 06 | UC-G16 Register Account (+ Email) | RegisterPage – AuthController – User | `register`, `verifyEmail` | code + spec |
-| [ ] | [ ] | 07 | UC-C03 Reset Forgotten Password (+ Email) | ForgotPasswordPage – AuthController – User | `forgotPassword`, `resetPassword` | code |
-| [ ] | [ ] | 08 | UC-A06 Assign Role to Account | AccountsPage – AccountController – User, Role | `assignRole` | code + spec |
+| [x] | [x] | 05 | UC-G17 Login | LoginPage – AuthController – User | `login` | code + spec |
+| [x] | [x] | 06 | UC-G16 Register Account (+ Email) | RegisterPage – AuthController – User | `register`, `verifyEmail` | code + spec |
+| [x] | [x] | 07 | UC-C03 Reset Forgotten Password (+ Email) | ForgotPasswordPage – AuthController – User | `forgotPassword`, `resetPassword` | code |
+| [x] | [x] | 08 | UC-A06 Assign Role to Account | AccountsPage – AccountController – User, Role | `assignRole` | code + spec |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-C03
 
@@ -77,10 +78,10 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [ ] | [ ] | 09 | UC-G01 Search Available Rooms | RoomSearchPage – RoomController – RoomType, Booking | `search` | code + spec |
-| [ ] | [ ] | 10 | UC-G07 Book Room (+ payOS) | BookingWizardPage – BookingController – Booking | `create` | code + spec (rút gọn từ §6.3) |
-| [ ] | [ ] | 11 | UC-G14 Cancel Booking | CustomerPages – BookingController – Booking | `cancel` | code + spec |
-| [ ] | [ ] | 12 | UC-G13 Check Booking Status | BookingLookupPage – BookingController – Booking | `lookup` | code |
+| [x] | [x] | 09 | UC-G01 Search Available Rooms | RoomSearchPage – RoomController – RoomType, Booking | `search` | code + spec |
+| [x] | [x] | 10 | UC-G07 Book Room (+ payOS) | BookingWizardPage – BookingController – Booking | `create` | code + spec (rút gọn từ §6.3) |
+| [x] | [x] | 11 | UC-G14 Cancel Booking | CustomerPages – BookingController – Booking | `cancel` | code + spec |
+| [x] | [x] | 12 | UC-G13 Check Booking Status | BookingLookupPage – BookingController – Booking | `lookup` | code |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-G13
 
@@ -90,10 +91,10 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [ ] | [ ] | 13 | UC-G10 Pay for Booking (+ payOS webhook) | PaymentResultPage – PaymentController – Payment | `webhook`, `reconcile` | code + spec |
-| [ ] | [ ] | 14 | UC-R15 Process Payment | DeskPages (folio) – FrontDeskController – Folio, Payment | `takePayment` | code + spec |
-| [ ] | [ ] | 15 | UC-C17 Request Refund | CustomerPages – RefundController – RefundRequest | `request` | code + spec |
-| [ ] | [ ] | 16 | UC-M14 Approve Refund Request | ApprovalsPage – RefundController – RefundRequest | `pending`, `decide` | code |
+| [x] | [x] | 13 | UC-G10 Pay for Booking (+ payOS webhook) | PaymentResultPage – PaymentController – Payment | `webhook`, `reconcile` | code + spec |
+| [x] | [x] | 14 | UC-R15 Process Payment | DeskPages (folio) – FrontDeskController – Folio, Payment | `takePayment` | code + spec |
+| [x] | [x] | 15 | UC-C17 Request Refund | CustomerPages – RefundController – RefundRequest | `request` | code + spec |
+| [x] | [x] | 16 | UC-M14 Approve Refund Request | ApprovalsPage – RefundController – RefundRequest | `pending`, `decide` | code |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-M14
 
@@ -103,10 +104,10 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [ ] | [ ] | 17 | UC-R06 Check In Guest | DeskPages – FrontDeskController – Booking, Room | `allocatableRooms`, `checkIn` | code + spec |
-| [ ] | [ ] | 18 | UC-R09 Check Out Guest | DeskPages – FrontDeskController – Folio, Room | `checkOut` | code + spec |
-| [ ] | [ ] | 19 | UC-E15 Submit Leave Request | MyLeavePage – LeaveController – LeaveRequest | `submit` | code |
-| [ ] | [ ] | 20 | UC-M06 Approve / Reject Leave Request | ApprovalsPage – LeaveController – LeaveRequest | `pending`, `decide` | code + spec |
+| [x] | [x] | 17 | UC-R06 Check In Guest | DeskPages – FrontDeskController – Booking, Room | `allocatableRooms`, `checkIn` | code + spec |
+| [x] | [x] | 18 | UC-R09 Check Out Guest | DeskPages – FrontDeskController – Folio, Room | `checkOut` | code + spec |
+| [x] | [x] | 19 | UC-E15 Submit Leave Request | MyLeavePage – LeaveController – LeaveRequest | `submit` | code |
+| [x] | [x] | 20 | UC-M06 Approve / Reject Leave Request | ApprovalsPage – LeaveController – LeaveRequest | `pending`, `decide` | code + spec |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-E15
 
@@ -116,12 +117,14 @@ Cột **Nguồn**:
 
 | Thành viên | Class (x/4) | Sequence (x/4) | Đặc tả UC bổ sung | Ảnh màn hình |
 |---|---|---|---|---|
-| M1 — Lê Trần Trọng Đạt | 0/4 | 1/4 | 1/3 | [ ] |
-| M2 — ____________ | 0/4 | 0/4 | 0/1 | [ ] |
-| M3 — ____________ | 0/4 | 0/4 | 0/1 | [ ] |
-| M4 — ____________ | 0/4 | 0/4 | 0/1 | [ ] |
-| M5 — ____________ | 0/4 | 0/4 | 0/1 | [ ] |
-| **Tổng** | **0/20** | **1/20** | **1/7** | |
+| M1 — Lê Trần Trọng Đạt | 4/4 | 4/4 | 1/3 | [ ] |
+| M2 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
+| M3 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
+| M4 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
+| M5 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
+| **Tổng** | **20/20** | **20/20** | **1/7** | |
+
+> Bản nháp 40 diagram do Codex vẽ (09/11/2026), đã render PNG và đối chiếu cặp CD/SD tự động. Mỗi thành viên vẫn cần **tự đọc lại** diagram của mình trước khi ghép SDS. Ngoại lệ so với quy ước: SD-03 có 3 entity (Promotion, AuditLog, Booking); SD-10 rất chi tiết, có thể rút gọn nhánh lỗi khi chèn SDS.
 
 ---
 
@@ -164,7 +167,7 @@ Lý do đặt: CD và SD cùng mô tả **một UC** (CD là cấu trúc, SD là
 
 ## 6. Việc chuẩn bị trước khi ghép SDS
 
-- [ ] Đủ 40 file diagram (`.txt` + `.png`)
+- [x] Đủ 40 file diagram (`.txt` + `.png`) trong `final/diagrams/Mx_<Subsystem>_Diagrams/`
 - [ ] 7 đặc tả UC bổ sung: UC-M09 ✔, UC-R13, UC-G11, UC-C03, UC-G13, UC-M14, UC-E15
 - [ ] Ảnh chụp màn hình app cho Screen Design
 - [ ] Điền tên 4 thành viên còn lại ở bảng **Thành viên** và Record of Changes

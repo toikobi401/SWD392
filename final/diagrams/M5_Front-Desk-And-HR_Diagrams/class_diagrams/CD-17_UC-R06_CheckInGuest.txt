@@ -1,0 +1,90 @@
+@startuml
+title CD-17 UC-R06 Check In Guest
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+class StaffBookingPage <<boundary>> {
+    + openCheckIn(booking)
+    + submitCheckIn(identity, roomId, roomVersion)
+    + onError(error)
+    + onSuccess(result)
+}
+
+class FrontDeskController <<boundary>> {
+    + allocatableRooms(req, res)
+    + checkIn(req, res)
+    + authenticate(req, res, next)
+    + requirePermission(permission)
+    + validateBody(rules)
+    + verifyIdentity(identity, booking)
+    + record(entry)
+    + checkIn(command)
+}
+
+class Booking <<entity>> {
+    - _id : ObjectId
+    - bookingCode : String
+    - reservationCode : String
+    - guest.fullName : String
+    - occupantName : String
+    - roomTypeId : ObjectId
+    - roomId : ObjectId
+    - checkInDate : Date
+    - checkOutDate : Date
+    - status : BookingStatus
+    - actualCheckInAt : Date
+    - subtotal : Number
+    - discount : Number
+    + findById(id) : Booking
+    + save() : Booking
+    + nights() : Number
+}
+
+class Room <<entity>> {
+    - _id : ObjectId
+    - roomNumber : String
+    - roomTypeId : ObjectId
+    - floor : Number
+    - status : RoomStatus
+    - version : Number
+    + find(filter) : Query
+    + sort(order) : Room[]
+    + findOneAndUpdate(filter, update, options) : Room
+}
+
+enum BookingStatus <<enumeration>> {
+    PENDING
+    CONFIRMED
+    CHECKED_IN
+    CHECKED_OUT
+    CANCELLED
+    NO_SHOW
+}
+
+enum RoomStatus <<enumeration>> {
+    VACANT_CLEAN
+    VACANT_DIRTY
+    OCCUPIED
+    INSPECTED
+    OUT_OF_ORDER
+}
+
+StaffBookingPage ..> FrontDeskController : GET /api/front-desk/allocatable\nPOST /api/front-desk/check-in
+FrontDeskController ..> Booking
+FrontDeskController ..> Room
+Booking "0..*" --> "0..1" Room : roomId
+Booking --> BookingStatus
+Room --> RoomStatus
+
+note bottom of FrontDeskController
+    Self-message operations fold middleware, coordinator, rule and audit
+    logic into this boundary, as in SD-17; they are not extra endpoints.
+    checkIn(command) summarizes supporting folio/ledger persistence.
+end note
+note bottom of StaffBookingPage
+    DeskPages.tsx: CheckInPanel is part of StaffBookingPage.
+    Page actions name UI interactions; onError/onSuccess are real callbacks.
+    Query chain operations are shown on their owning model.
+end note
+@enduml
