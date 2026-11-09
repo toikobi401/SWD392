@@ -32,10 +32,10 @@ Mỗi người: **4 use case**, mỗi use case vẽ **1 class diagram (CD) + 1 s
   - Controller: ghi method xử lý UC (cột **Controller method** bên dưới).
   - Quan hệ: Page ⇢ Controller (dependency, gọi API) · Controller ⇢ Model (dependency) · giữa các Model dùng association có multiplicity.
   - Không vẽ lại toàn bộ subsystem — 9 class diagram subsystem đã có trong `diagrams/class_diagrams/`.
-- [ ] **Định dạng**: PlantUML `.txt` (import vào Visual Paradigm), xuất thêm ảnh `.png` để chèn SDS.
+- [ ] **Định dạng**: draw.io `.drawio` (shape gốc, sửa trực tiếp trong draw.io), trình bày theo mẫu `diagrams/sequence_diagrams/UC-M09_Update_Room_Info_SequenceDiagram.drawio`. Ảnh chèn SDS xuất từ draw.io (File → Export as → PNG).
 - [ ] **Thư mục & tên file** — mỗi thành viên một thư mục `final/diagrams/Mx_<Subsystem>_Diagrams/`:
-  - Class: `class_diagrams/CD-xx_UC-yyy_<TenUC>.txt` (+ `.png`)
-  - Sequence: `sequence_diagrams/SD-xx_UC-yyy_<TenUC>.txt` (+ `.png`)
+  - Class: `class_diagrams/CD-xx_UC-yyy_<TenUC>.drawio`
+  - Sequence: `sequence_diagrams/SD-xx_UC-yyy_<TenUC>.drawio`
   - Thư mục: `M1_Inventory-And-Pricing_Diagrams` · `M2_Auth-And-Administration_Diagrams` · `M3_Booking-And-Customer_Diagrams` · `M4_Billing-And-Payment_Diagrams` · `M5_Front-Desk-And-HR_Diagrams`
 - [ ] **Ngôn ngữ trong diagram**: tiếng Anh (khớp tên class/route trong code).
 
@@ -52,7 +52,7 @@ Cột **Nguồn**:
 
 | CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – RoomController – Room | `getRoom`, `updateRoom` (mới) | thiết kế (SD đã vẽ `.drawio` + `.txt`) |
+| [x] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – RoomController – Room | `getRoom`, `updateRoom` (mới) | thiết kế |
 | [x] | [x] | 02 | UC-R13 Update Room Status | RoomRackPage – FrontDeskController – Room | `updateRoomStatus` | code |
 | [x] | [x] | 03 | UC-M20 Create Promotion Code | PromotionsPage – PromotionController – Promotion | `create` | code + spec (UC-M11) |
 | [x] | [x] | 04 | UC-G11 Apply Discount Code | BookingWizardPage – PromotionController – Promotion | `validate` | code |
@@ -124,7 +124,7 @@ Cột **Nguồn**:
 | M5 — ____________ | 4/4 | 4/4 | 0/1 | [ ] |
 | **Tổng** | **20/20** | **20/20** | **1/7** | |
 
-> Bản nháp 40 diagram do Codex vẽ (09/11/2026), đã render PNG và đối chiếu cặp CD/SD tự động. Mỗi thành viên vẫn cần **tự đọc lại** diagram của mình trước khi ghép SDS. Ngoại lệ so với quy ước: SD-03 có 3 entity (Promotion, AuditLog, Booking); SD-10 rất chi tiết, có thể rút gọn nhánh lỗi khi chèn SDS.
+> Bản nháp 40 diagram do Codex vẽ (09/11/2026), đã đối chiếu cặp CD/SD tự động và chuyển sang `.drawio`. Mỗi thành viên vẫn cần **tự đọc lại** diagram của mình trước khi ghép SDS. Ngoại lệ so với quy ước: SD-03 có 3 entity (Promotion, AuditLog, Booking); SD-10 rất chi tiết, có thể rút gọn nhánh lỗi khi chèn SDS.
 
 ---
 
@@ -167,7 +167,7 @@ Lý do đặt: CD và SD cùng mô tả **một UC** (CD là cấu trúc, SD là
 
 ## 6. Việc chuẩn bị trước khi ghép SDS
 
-- [x] Đủ 40 file diagram (`.txt` + `.png`) trong `final/diagrams/Mx_<Subsystem>_Diagrams/`
+- [x] Đủ 40 file diagram `.drawio` trong `final/diagrams/Mx_<Subsystem>_Diagrams/`
 - [ ] 7 đặc tả UC bổ sung: UC-M09 ✔, UC-R13, UC-G11, UC-C03, UC-G13, UC-M14, UC-E15
 - [ ] Ảnh chụp màn hình app cho Screen Design
 - [ ] Điền tên 4 thành viên còn lại ở bảng **Thành viên** và Record of Changes
