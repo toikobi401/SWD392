@@ -1,0 +1,230 @@
+<mxfile host="65bd71144e">
+    <diagram id="context-diagram" name="Context Diagram">
+        <mxGraphModel dx="1152" dy="552" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1170" pageHeight="546" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="sys" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=16;fontStyle=1;" value="HotelHub&lt;br&gt;Management&lt;br&gt;System" vertex="1">
+                    <mxGeometry height="250" width="250" x="460" y="148" as="geometry"/>
+                </mxCell>
+                <mxCell id="l0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Guest" vertex="1">
+                    <mxGeometry height="132" width="150" x="20" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="f0" edge="1" parent="1" source="l0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.1667;entryX=0.4520;entryY=0.0023;" target="sys" value="Room search criteria">
+                    <mxGeometry relative="1" x="-0.209" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="573" y="42"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f1" edge="1" parent="1" source="l0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.3333;entryX=0.4040;entryY=0.0093;" target="sys" value="Booking &amp;amp; contact details">
+                    <mxGeometry relative="1" x="-0.181" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="561" y="64"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f2" edge="1" parent="1" source="l0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.5000;entryX=0.3560;entryY=0.0212;" target="sys" value="Registration / login details">
+                    <mxGeometry relative="1" x="-0.151" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="549" y="86"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f3" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.3080;exitY=0.0383;entryX=1;entryY=0.6667;" target="l0" value="Room availability, prices &amp;amp; promotions">
+                    <mxGeometry relative="1" x="0.119" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="537" y="108"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f4" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.2600;exitY=0.0614;entryX=1;entryY=0.8333;" target="l0" value="Booking confirmation &amp;amp; status">
+                    <mxGeometry relative="1" x="0.086" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="525" y="130"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="l1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Customer" vertex="1">
+                    <mxGeometry height="110" width="150" x="20" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="f5" edge="1" parent="1" source="l1" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.2000;entryX=0.2120;entryY=0.0913;" target="sys" value="Profile update &amp;amp; password change">
+                    <mxGeometry relative="1" x="-0.058" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f6" edge="1" parent="1" source="l1" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.4000;entryX=0.0592;entryY=0.2640;" target="sys" value="Refund request &amp;amp; review">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f7" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.0224;exitY=0.3520;entryX=1;entryY=0.6000;" target="l1" value="Booking history &amp;amp; invoices">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f8" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.0036;exitY=0.4400;entryX=1;entryY=0.8000;" target="l1" value="Loyalty points &amp;amp; refund status">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="l2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Employee" vertex="1">
+                    <mxGeometry height="88" width="150" x="20" y="298" as="geometry"/>
+                </mxCell>
+                <mxCell id="f9" edge="1" parent="1" source="l2" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.2500;entryX=0.0367;entryY=0.6880;" target="sys" value="Attendance check-in / check-out">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f10" edge="1" parent="1" source="l2" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.5000;entryX=0.0831;entryY=0.7760;" target="sys" value="Leave &amp;amp; shift swap requests">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f11" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.3560;exitY=0.9788;entryX=1;entryY=0.7500;" target="l2" value="Work schedule, leave balance &amp;amp; payslip">
+                    <mxGeometry relative="1" x="0.07" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="l3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="payOS (VietQR)" vertex="1">
+                    <mxGeometry height="66" width="150" x="20" y="404" as="geometry"/>
+                </mxCell>
+                <mxCell id="f12" edge="1" parent="1" source="l3" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=1;exitY=0.3333;entryX=0.4040;entryY=0.9907;" target="sys" value="Payment result (webhook)">
+                    <mxGeometry relative="1" x="-0.072" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="561" y="426"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f13" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.4520;exitY=0.9977;entryX=1;entryY=0.6667;" target="l3" value="Payment link request">
+                    <mxGeometry relative="1" x="0.112" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="573" y="448"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Receptionist" vertex="1">
+                    <mxGeometry height="110" width="150" x="1000" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="f14" edge="1" parent="1" source="r0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.2000;entryX=0.5480;entryY=0.0023;" target="sys" value="Walk-in booking &amp;amp; check-in / check-out">
+                    <mxGeometry relative="1" x="-0.209" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="597" y="42"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f15" edge="1" parent="1" source="r0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.4000;entryX=0.5960;entryY=0.0093;" target="sys" value="Room status update">
+                    <mxGeometry relative="1" x="-0.181" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="609" y="64"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f16" edge="1" parent="1" source="r0" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.6000;entryX=0.6440;entryY=0.0212;" target="sys" value="Desk payment &amp;amp; refund">
+                    <mxGeometry relative="1" x="-0.151" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="621" y="86"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f17" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.6920;exitY=0.0383;entryX=0;entryY=0.8000;" target="r0" value="Room availability, folio &amp;amp; invoice">
+                    <mxGeometry relative="1" x="0.119" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="633" y="108"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Manager" vertex="1">
+                    <mxGeometry height="110" width="150" x="1000" y="148" as="geometry"/>
+                </mxCell>
+                <mxCell id="f18" edge="1" parent="1" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.2000;entryX=0.714;entryY=0.037;entryDx=0;entryDy=0;" target="sys" value="Room type, pricing &amp;amp; promotion settings">
+                    <mxGeometry relative="1" x="-0.0166" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="645" y="154.65"/>
+                        </Array>
+                        <mxPoint x="1000" y="154.65" as="sourcePoint"/>
+                        <mxPoint x="645" y="148.00000000000003" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f19" edge="1" parent="1" source="r1" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.4000;entryX=0.7880;entryY=0.0913;" target="sys" value="Leave / refund approval decisions">
+                    <mxGeometry relative="1" x="-0.058" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f20" edge="1" parent="1" source="r1" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.6000;entryX=0.9408;entryY=0.2640;" target="sys" value="Salary &amp;amp; work schedule data">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f21" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.9776;exitY=0.3520;entryX=0;entryY=0.8000;" target="r1" value="Revenue &amp;amp; occupancy reports">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Admin" vertex="1">
+                    <mxGeometry height="88" width="150" x="1000" y="276" as="geometry"/>
+                </mxCell>
+                <mxCell id="f22" edge="1" parent="1" source="r2" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.2500;entryX=0.9899;entryY=0.6000;" target="sys" value="Accounts, roles &amp;amp; permissions">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f23" edge="1" parent="1" source="r2" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.5000;entryX=0.9633;entryY=0.6880;" target="sys" value="System &amp;amp; payment gateway settings">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f24" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.9169;exitY=0.7760;entryX=0;entryY=0.7500;" target="r2" value="Audit log &amp;amp; login history">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Google OAuth" vertex="1">
+                    <mxGeometry height="66" width="150" x="1000" y="382" as="geometry"/>
+                </mxCell>
+                <mxCell id="f25" edge="1" parent="1" source="r3" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0;exitY=0.3333;entryX=0.6440;entryY=0.9788;" target="sys" value="User profile &amp;amp; token">
+                    <mxGeometry relative="1" x="-0.029" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="621" y="404"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="f26" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.5960;exitY=0.9907;entryX=0;entryY=0.6667;" target="r3" value="Authorization request">
+                    <mxGeometry relative="1" x="0.072" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="609" y="426"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="r4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" value="Email / SMS Service" vertex="1">
+                    <mxGeometry height="60" width="150" x="1000" y="466" as="geometry"/>
+                </mxCell>
+                <mxCell id="f27" edge="1" parent="1" source="sys" style="html=1;rounded=0;endArrow=block;endFill=1;endSize=6;fontSize=11;verticalAlign=bottom;labelBackgroundColor=none;exitPerimeter=0;entryPerimeter=0;exitX=0.5480;exitY=0.9977;entryX=0;entryY=0.5000;" target="r4" value="Booking confirmation, OTP &amp;amp; notifications">
+                    <mxGeometry relative="1" x="0.197" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="597" y="496"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
