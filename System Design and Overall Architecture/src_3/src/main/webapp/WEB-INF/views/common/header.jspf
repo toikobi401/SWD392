@@ -1,0 +1,40 @@
+<%@ page pageEncoding="UTF-8" %>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><c:out value="${pageTitle}" /> - HMS Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; color: #202124; }
+        nav { background: #1a73e8; padding: 0.8rem 1rem; }
+        nav a { color: #fff; margin-right: 1.5rem; text-decoration: none; font-weight: bold; }
+        main { margin: 1.5rem auto; max-width: 1000px; padding: 0 1rem; }
+        section { margin-top: 2rem; }
+        h2 { border-bottom: 2px solid #1a73e8; padding-bottom: 0.3rem; font-size: 1.2rem; }
+        table { border-collapse: collapse; width: 100%; margin-top: 0.8rem; }
+        th, td { border-bottom: 1px solid #dadce0; padding: 0.6rem; text-align: left; vertical-align: middle; }
+        th { background: #f1f3f4; }
+        form.inline { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; flex-wrap: wrap; }
+        input, select, button { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
+        input[type=number] { width: 9rem; }
+        button { cursor: pointer; }
+        .flash { padding: 0.7rem 1rem; border-radius: 4px; }
+        .ok { background: #e6f4ea; color: #137333; }
+        .err { background: #fce8e6; color: #c5221f; }
+        .muted { color: #5f6368; }
+        .PENDING { color: #b06000; }
+        .APPROVED { color: #137333; }
+        .REJECTED { color: #c5221f; }
+    </style>
+</head>
+<body>
+<nav>
+    <a href="${pageContext.request.contextPath}/manager/salary">Lương &amp; thưởng</a>
+    <a href="${pageContext.request.contextPath}/manager/schedule">Lịch làm việc &amp; duyệt</a>
+    <a href="${pageContext.request.contextPath}/manager/rooms">Phòng &amp; dịch vụ</a>
+</nav>
+<main>
+    <h1><c:out value="${pageTitle}" /></h1>
+    <c:if test="${not empty message}"><p class="flash ok"><c:out value="${message}" /></p></c:if>
+    <c:if test="${not empty error}"><p class="flash err"><c:out value="${error}" /></p></c:if>
