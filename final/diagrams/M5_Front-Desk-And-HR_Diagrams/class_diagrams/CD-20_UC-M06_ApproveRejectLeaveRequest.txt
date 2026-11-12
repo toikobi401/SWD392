@@ -9,10 +9,21 @@ class ApprovalsPage <<boundary>> {
     +decide(id, approve, note)
 }
 
+class Router <<boundary>> {
+    +route(GET /api/leave-requests/pending)
+    +route(PATCH /api/leave-requests/:id/decision)
+    +authenticate(req)
+    +requirePermission(permission)
+}
+
 class LeaveController <<boundary>> {
     +pending(req, res)
     +decide(req, res)
-    +validateRequest(req)
+}
+
+class LeaveApprovalService <<control>> {
+    +pendingQueue(managerId, department) : LeaveRequest[]
+    +decide(command) : LeaveRequest
 }
 
 class LeaveRequest <<entity>> {
@@ -48,8 +59,10 @@ enum LeaveStatus <<enumeration>> {
     ESCALATED
 }
 
-ApprovalsPage ..> LeaveController : GET /api/leave-requests/pending\nPATCH /api/leave-requests/:id/decision
-LeaveController ..> LeaveRequest
+ApprovalsPage ..> Router : GET /api/leave-requests/pending\nPATCH /api/leave-requests/:id/decision
+Router ..> LeaveController
+LeaveController ..> LeaveApprovalService
+LeaveApprovalService ..> LeaveRequest
 LeaveRequest --> LeaveType
 LeaveRequest --> LeaveStatus
 

@@ -8,9 +8,19 @@ class StaffBookingPage <<boundary>> {
     +checkIn(bookingId, identity, roomId)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/front-desk/check-in)
+    +authenticate(req)
+    +requirePermission(permission)
+    +validateBody(rules)
+}
+
 class FrontDeskController <<boundary>> {
     +checkIn(req, res)
-    +validateRequest(req)
+}
+
+class CheckInService <<control>> {
+    +checkIn(command) : CheckInResult
 }
 
 class Booking <<entity>> {
@@ -58,9 +68,11 @@ enum RoomStatus <<enumeration>> {
     OUT_OF_ORDER
 }
 
-StaffBookingPage ..> FrontDeskController : GET /api/front-desk/allocatable\nPOST /api/front-desk/check-in
-FrontDeskController ..> Booking
-FrontDeskController ..> Room
+StaffBookingPage ..> Router : POST /api/front-desk/check-in
+Router ..> FrontDeskController
+FrontDeskController ..> CheckInService
+CheckInService ..> Booking
+CheckInService ..> Room
 Booking "0..*" --> "0..1" Room : roomId
 Booking --> BookingStatus
 Room --> RoomStatus

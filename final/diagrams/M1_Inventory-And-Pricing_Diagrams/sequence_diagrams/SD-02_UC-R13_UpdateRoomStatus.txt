@@ -3,40 +3,50 @@ title SD-02 UC-R13 Update Room Status
 
 actor "Receptionist" as RE
 boundary "RoomRackPage" as UI
+boundary "Router" as RO
 boundary "FrontDeskController" as C
+control "RoomStatusService" as S
 entity "Room" as R
 database "MongoDB" as DB
 
 RE -> UI : select room and new status
 activate RE
 activate UI
-UI -> C : submit status change
+UI -> RO : PATCH /api/rooms/:id/status
+activate RO
+RO -> RO : authenticate, check permission
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> R : get room
+C -> S : apply status change
+activate S
+S -> R : get room
 activate R
 R -> DB : find room
 activate DB
 DB --> R : room data
 deactivate DB
-R --> C : room
+R --> S : room
 deactivate R
 alt status change is allowed
-C -> R : update room status
+S -> R : update room status
 activate R
 R -> DB : save new status
 activate DB
 DB --> R : status saved
 deactivate DB
-R --> C : updated room
+R --> S : updated room
 deactivate R
+S --> C : updated room
 C --> UI : status updated
 UI --> RE : refresh room rack
 else status change not allowed
+S --> C : invalid status change
 C --> UI : invalid status change
 UI --> RE : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate RE
 @enduml

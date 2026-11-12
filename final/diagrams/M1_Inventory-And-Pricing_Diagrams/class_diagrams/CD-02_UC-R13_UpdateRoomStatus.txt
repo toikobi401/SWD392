@@ -8,9 +8,18 @@ class RoomRackPage <<boundary>> {
     +changeStatus(roomId, status)
 }
 
+class Router <<boundary>> {
+    +route(PATCH /api/rooms/:id/status)
+    +authenticate(req)
+    +requirePermission(permission)
+}
+
 class FrontDeskController <<boundary>> {
     +updateRoomStatus(req, res)
-    +validateRequest(req)
+}
+
+class RoomStatusService <<control>> {
+    +apply(roomId, event, notes) : Room
 }
 
 class Room <<entity>> {
@@ -31,8 +40,10 @@ enum RoomStatus <<enumeration>> {
     OUT_OF_ORDER
 }
 
-RoomRackPage ..> FrontDeskController : PATCH /api/rooms/:id/status
-FrontDeskController ..> Room
+RoomRackPage ..> Router : PATCH /api/rooms/:id/status
+Router ..> FrontDeskController
+FrontDeskController ..> RoomStatusService
+RoomStatusService ..> Room
 Room --> RoomStatus : status
 
 @enduml

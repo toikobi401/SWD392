@@ -3,7 +3,9 @@ title SD-10 UC-G07 Book Room
 
 actor "Guest" as G
 boundary "BookingWizardPage" as UI
+boundary "Router" as RO
 boundary "BookingController" as C
+control "BookingService" as S
 entity "Booking" as B
 database "MongoDB" as DB
 participant "payOS" as X
@@ -11,37 +13,45 @@ participant "payOS" as X
 G -> UI : confirm booking details
 activate G
 activate UI
-UI -> C : submit booking
+UI -> RO : POST /api/bookings
+activate RO
+RO -> RO : identify user if signed in, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> B : check room availability
+C -> S : book rooms
+activate S
+S -> B : check room availability
 activate B
 B -> DB : count overlapping bookings
 activate DB
 DB --> B : booking counts
 deactivate DB
-B --> C : availability
+B --> S : availability
 deactivate B
 alt rooms available
-C -> B : create pending booking
+S -> B : create pending booking
 activate B
 B -> DB : save booking
 activate DB
 DB --> B : booking saved
 deactivate DB
-B --> C : booking
+B --> S : booking
 deactivate B
-C -> X : create payment link
+S -> X : create payment link
 activate X
-X --> C : checkout URL
+X --> S : checkout URL
 deactivate X
+S --> C : booking and payment URL
 C --> UI : booking pending and payment URL
 UI --> G : redirect to payOS checkout
 else rooms no longer available
+S --> C : no availability
 C --> UI : no availability
 UI --> G : show error and search again
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate G
 @enduml

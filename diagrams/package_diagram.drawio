@@ -201,13 +201,13 @@
                 <mxCell id="pAuth" value="auth&#xa;AuthService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#D9F2E1;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="110" y="160" width="140" height="65" as="geometry"/>
                 </mxCell>
-                <mxCell id="pBook" value="booking&#xa;BookingCoordinator" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                <mxCell id="pBook" value="booking&#xa;BookingService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="270" y="160" width="160" height="65" as="geometry"/>
                 </mxCell>
-                <mxCell id="pFront" value="frontdesk&#xa;CheckIn / CheckOut&#xa;Coordinator" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                <mxCell id="pFront" value="frontdesk&#xa;CheckIn / CheckOut&#xa;Service" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="450" y="160" width="170" height="65" as="geometry"/>
                 </mxCell>
-                <mxCell id="pBill" value="billing&#xa;PaymentService&#xa;RefundCoordinator" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
+                <mxCell id="pBill" value="billing&#xa;PaymentService&#xa;RefundService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#C6EBD2;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="640" y="160" width="160" height="65" as="geometry"/>
                 </mxCell>
                 <mxCell id="pHr" value="hr&#xa;LeaveApprovalService" style="shape=folder;fontStyle=1;spacingTop=10;tabWidth=60;tabHeight=16;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#D9F2E1;strokeColor=#34A853;verticalAlign=middle;fontSize=11;" parent="1" vertex="1">

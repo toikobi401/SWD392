@@ -3,40 +3,50 @@ title SD-11 UC-G14 Cancel Booking
 
 actor "Customer" as CU
 boundary "BookingDetailPage" as UI
+boundary "Router" as RO
 boundary "BookingController" as C
+control "BookingService" as S
 entity "Booking" as B
 database "MongoDB" as DB
 
 CU -> UI : request cancellation
 activate CU
 activate UI
-UI -> C : cancel booking
+UI -> RO : POST /api/bookings/:id/cancel
+activate RO
+RO -> RO : authenticate, check permission
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> B : get booking
+C -> S : cancel booking
+activate S
+S -> B : get booking
 activate B
 B -> DB : find booking
 activate DB
 DB --> B : booking data
 deactivate DB
-B --> C : booking
+B --> S : booking
 deactivate B
 alt booking is CONFIRMED
-C -> B : cancel booking and compute refund
+S -> B : cancel booking and compute refund
 activate B
 B -> DB : save cancellation
 activate DB
 DB --> B : cancellation saved
 deactivate DB
-B --> C : cancelled booking
+B --> S : cancelled booking
 deactivate B
+S --> C : cancellation result
 C --> UI : cancellation result and refund amount
 UI --> CU : show cancellation result
 else booking cannot be cancelled
+S --> C : cancellation not allowed
 C --> UI : cancellation not allowed
 UI --> CU : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate CU
 @enduml

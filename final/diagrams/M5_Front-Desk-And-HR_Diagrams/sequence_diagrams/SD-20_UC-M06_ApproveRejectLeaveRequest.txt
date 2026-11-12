@@ -3,44 +3,60 @@ title SD-20 UC-M06 Approve / Reject Leave Request
 
 actor "Manager" as A
 boundary "ApprovalsPage" as UI
+boundary "Router" as RO
 boundary "LeaveController" as C
+control "LeaveApprovalService" as S
 entity "LeaveRequest" as L
 database "MongoDB" as DB
 
 A -> UI : open pending leave requests
 activate A
 activate UI
-UI -> C : request pending leave requests
+UI -> RO : GET /api/leave-requests/pending
+activate RO
+RO -> RO : authenticate, check permission
+RO -> C : forward request
 activate C
-C -> L : get pending requests
+C -> S : get pending queue
+activate S
+S -> L : get pending requests
 activate L
 L -> DB : find pending requests
 activate DB
 DB --> L : requests
 deactivate DB
-L --> C : pending requests
+L --> S : pending requests
 deactivate L
+S --> C : pending queue
+deactivate S
 C --> UI : pending leave list
 UI --> A : show pending list
 A -> UI : approve request
-UI -> C : submit decision
-C -> C : validate request
+UI -> RO : PATCH /api/leave-requests/:id/decision
+RO -> RO : authenticate, check permission
+RO -> C : forward request
+C -> S : decide leave request
+activate S
 alt employee has enough leave balance
-C -> L : approve leave request
+S -> L : approve leave request
 activate L
 L -> DB : save decision
 activate DB
 DB --> L : decision saved
 deactivate DB
-L --> C : updated request
+L --> S : updated request
 deactivate L
+S --> C : approved request
 C --> UI : request approved
 UI --> A : update pending list
 else not enough leave balance
+S --> C : insufficient leave balance
 C --> UI : insufficient leave balance
 UI --> A : show warning
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate A
 @enduml

@@ -4,13 +4,22 @@ title CD-10 UC-G07 Book Room
 skinparam classAttributeIconSize 0
 hide empty members
 
-class "BookingWizardPage" as UI <<boundary>> {
+class BookingWizardPage <<boundary>> {
     +submitBooking()
 }
 
-class "BookingController" as C <<boundary>> {
+class Router <<boundary>> {
+    +route(POST /api/bookings)
+    +optionalAuth(req)
+    +validateBody(rules)
+}
+
+class BookingController <<boundary>> {
     +create(req, res)
-    +validateRequest(req)
+}
+
+class BookingService <<control>> {
+    +bookRoom(command) : BookingResult
 }
 
 class "Booking" as B <<entity>> {
@@ -54,10 +63,11 @@ class "PayOS" as P <<external>> {
     +createPaymentLink(order) : String
 }
 
-C ..> P : POST /v2/payment-requests
-
-UI ..> C : POST /api/bookings
-C ..> B
+BookingWizardPage ..> Router : POST /api/bookings
+Router ..> BookingController
+BookingController ..> BookingService
+BookingService ..> B
+BookingService ..> P
 B --> BookingStatus : status
 
 @enduml

@@ -3,7 +3,9 @@ title SD-18 UC-R09 Check Out Guest
 
 actor "Receptionist" as A
 boundary "StaffBookingPage" as UI
+boundary "Router" as RO
 boundary "FrontDeskController" as C
+control "CheckOutService" as S
 entity "Folio" as F
 entity "Room" as R
 database "MongoDB" as DB
@@ -11,41 +13,49 @@ database "MongoDB" as DB
 A -> UI : request check-out
 activate A
 activate UI
-UI -> C : submit check-out
+UI -> RO : POST /api/front-desk/check-out
+activate RO
+RO -> RO : authenticate, check permission, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> F : get folio
+C -> S : check out guest
+activate S
+S -> F : get folio
 activate F
 F -> DB : find folio
 activate DB
 DB --> F : folio data
 deactivate DB
-F --> C : folio
+F --> S : folio
 deactivate F
 alt balance is settled
-C -> F : close folio
+S -> F : close folio
 activate F
 F -> DB : save folio
 activate DB
 DB --> F : folio saved
 deactivate DB
-F --> C : closed folio
+F --> S : closed folio
 deactivate F
-C -> R : release room
+S -> R : release room
 activate R
 R -> DB : save room as VACANT_DIRTY
 activate DB
 DB --> R : room saved
 deactivate DB
-R --> C : released room
+R --> S : released room
 deactivate R
+S --> C : invoice
 C --> UI : check-out completed with invoice
 UI --> A : show invoice
 else outstanding balance
+S --> C : balance due
 C --> UI : balance must be settled first
 UI --> A : show balance due
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate A
 @enduml

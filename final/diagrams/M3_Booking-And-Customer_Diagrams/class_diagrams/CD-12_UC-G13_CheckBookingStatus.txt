@@ -4,13 +4,20 @@ title CD-12 UC-G13 Check Booking Status
 skinparam classAttributeIconSize 0
 hide empty members
 
-class "BookingLookupPage" as UI <<boundary>> {
+class BookingLookupPage <<boundary>> {
     +lookup(code, email)
 }
 
-class "BookingController" as C <<boundary>> {
+class Router <<boundary>> {
+    +route(GET /api/bookings/lookup)
+}
+
+class BookingController <<boundary>> {
     +lookup(req, res)
-    +validateRequest(req)
+}
+
+class BookingQueries <<control>> {
+    +lookup(code, email) : Reservation
 }
 
 class "Booking" as B <<entity>> {
@@ -39,8 +46,10 @@ enum BookingStatus <<enumeration>> {
     NO_SHOW
 }
 
-UI ..> C : GET /api/bookings/lookup
-C ..> B
+BookingLookupPage ..> Router : GET /api/bookings/lookup
+Router ..> BookingController
+BookingController ..> BookingQueries
+BookingQueries ..> B
 B --> BookingStatus : status
 
 @enduml

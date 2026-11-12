@@ -99,16 +99,17 @@ nộp là bản **SDS** (Requirement & Design Specification) cùng bộ sơ đ�
 | `diagrams/` | 6 use case diagram theo actor (`Guest.drawio`…) · `package_diagram.drawio` · `class_diagrams/` 9 class diagram theo subsystem · `sequence_diagrams/` (UC-M09 là **mẫu trình bày** cho mọi SD) |
 | `final/SDS_HotelHub_v2.docx` | Bản SDS đang nộp |
 | `final/SDS_Diagram_Checklist.md` | **Checklist:** phân công, **quy ước vẽ CD/SD (§1)**, bảng UC từng người, tiến độ, khung SDS và vị trí từng sơ đồ (§5) |
-| `final/diagrams/` | `Context_Diagram_HotelHub.drawio`, `ERD_HotelHub.drawio` (crow's foot toàn hệ thống), và `Mx_<Subsystem>_Diagrams/` chứa CD-xx, SD-xx (`.drawio` + `.txt` PlantUML) |
+| `final/diagrams/` | `Context_Diagram_HotelHub.drawio`, `ERD_HotelHub.drawio` (crow's foot toàn hệ thống), `AI_Agent_Configuration.drawio` (agent nào đọc file cấu hình nào — SDS mục IV), và `Mx_<Subsystem>_Diagrams/` chứa CD-xx, SD-xx (`.drawio` + `.txt` PlantUML) |
 | `class_material/` | Slide môn học — chỉ đọc, không commit (R7) |
 
 ---
 
 ## 3. Khi vẽ hoặc sửa sơ đồ
 
-- **Quy ước CD/SD là checklist §1** — đọc trước khi vẽ: 5 lifeline `Actor – UI page – Controller – Model –
-  DB`, đúng một khung `alt` hai nhánh, Controller chỉ một self-call `validate request`, CD chỉ chứa class có
-  mặt trong SD cùng số, cách đặt tên file. Đừng chép lại các luật đó vào chỗ khác (R2).
+- **Quy ước CD/SD là checklist §1** — đọc trước khi vẽ: 7 lifeline `Actor – UI page – Router – Controller –
+  Service – Model – DB` (request đi qua `routes/` và `services/` như code), đúng một khung `alt` hai nhánh,
+  Router một self-call ghi middleware thật, CD chỉ chứa class có mặt trong SD cùng số, cách đặt tên file. Đừng
+  chép lại các luật đó vào chỗ khác (R2).
 - **CD-xx và SD-xx cùng số là cùng một use case** và phải khớp nhau: mỗi lifeline là một class trong CD,
   mỗi bước gọi ứng với một method.
 - Mỗi sơ đồ trong `final/diagrams/Mx_*` có **hai file cùng tên** `.drawio` + `.txt` (PlantUML, để import

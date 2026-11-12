@@ -8,9 +8,17 @@ class RegisterPage <<boundary>> {
     +register(form)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/auth/register)
+    +validateBody(rules)
+}
+
 class AuthController <<boundary>> {
     +register(req, res)
-    +validateRequest(req)
+}
+
+class AuthService <<control>> {
+    +register(command) : User
 }
 
 class User <<entity>> {
@@ -38,9 +46,11 @@ enum AccountStatus <<enumeration>> {
     DEACTIVATED
 }
 
-RegisterPage ..> AuthController : POST /api/auth/register\nGET /api/auth/verify?token=
-AuthController ..> User
-AuthController ..> EmailService : verification link
+RegisterPage ..> Router : POST /api/auth/register
+Router ..> AuthController
+AuthController ..> AuthService
+AuthService ..> User
+AuthService ..> EmailService
 User --> AccountStatus : status
 
 @enduml

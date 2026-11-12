@@ -4,13 +4,20 @@ title CD-09 UC-G01 Search Available Rooms
 skinparam classAttributeIconSize 0
 hide empty members
 
-class "RoomSearchPage" as UI <<boundary>> {
+class RoomSearchPage <<boundary>> {
     +search(criteria)
 }
 
-class "RoomController" as C <<boundary>> {
+class Router <<boundary>> {
+    +route(GET /api/rooms/search)
+}
+
+class RoomController <<boundary>> {
     +search(req, res)
-    +validateRequest(req)
+}
+
+class RoomQueries <<control>> {
+    +searchPriced(criteria) : PricedAvailability[]
 }
 
 class "RoomType" as RT <<entity>> {
@@ -45,11 +52,12 @@ enum BookingStatus <<enumeration>> {
     NO_SHOW
 }
 
+RoomSearchPage ..> Router : GET /api/rooms/search
+Router ..> RoomController
+RoomController ..> RoomQueries
+RoomQueries ..> RT
+RoomQueries ..> B
 RT "1" -- "0..*" B : roomTypeId
-
-UI ..> C : GET /api/rooms/search
-C ..> RT
-C ..> B
 B --> BookingStatus : status
 
 @enduml

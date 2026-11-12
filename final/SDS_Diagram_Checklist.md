@@ -22,17 +22,19 @@ Mỗi người: **4 use case**, mỗi use case vẽ **1 class diagram (CD) + 1 s
 - [ ] **CD-xx và SD-xx cùng số là cùng một use case**, dùng chung bộ class.
   - Mỗi lifeline trong SD (trừ Actor và DB) phải là một class trong CD.
   - Mỗi bước gọi vào một lifeline ứng với một method của class đó trong CD (khớp về ý nghĩa và thứ tự; nhãn SD viết bằng ngôn ngữ nghiệp vụ nên không trùng chữ với tên method).
-- [ ] **Sequence diagram**: 5 lifeline `Actor – UI page – Controller – Model – DB`, theo mẫu `SD-01`.
+- [ ] **Sequence diagram**: 7 lifeline `Actor – UI page – Router – Controller – Service – Model – DB`, theo mẫu `SD-01`. Request đi đúng đường của code: UI gọi route trong `routes/index.ts` → controller → service (`services/`) xử lý logic → model.
   - Chỉ thêm lifeline hệ thống ngoài (payOS, Email service) khi nó nằm trên luồng chính.
   - UC chạm 2 model thì vẽ cả 2 model (VD `User, Role`).
   - **1 luồng chính + 1 luồng thay thế**: đúng 1 khung `alt` 2 nhánh — nhánh trên là luồng thành công, nhánh dưới là lỗi nghiệp vụ chính của UC. Không dùng `opt`/`loop`/`ref`, không lồng khung.
   - Nhãn message bằng ngôn ngữ nghiệp vụ tiếng Anh, ngắn (VD `get pending refund requests`), không ghi query, field hay danh sách mã lỗi. Message trả về dùng nét đứt.
-  - Controller chỉ có 1 self-call `validate request` (gộp xác thực, phân quyền, kiểm tra dữ liệu); xác thực coi là tiền điều kiện, không vẽ nhánh 401/403.
+  - UI → Router ghi đúng HTTP method + route (VD `PATCH /api/rooms/:id/status`). Router có 1 self-call ghi middleware thật của route đó (`authenticate, check permission, validate input`); route công khai không có self-call. Không vẽ nhánh 401/403.
+  - Router → Controller: `forward request`. Controller không có self-call; nó gọi service rồi trả kết quả cho UI.
+  - Service (`<<control>>`) gọi model; kết quả trả về Controller trong từng nhánh `alt`.
 - [ ] **Class diagram** (design class diagram cho một UC):
-  - Class: UI page `<<boundary>>` · Controller `<<boundary>>` · Model `<<entity>>` · enum `<<enumeration>>` mà model dùng — chỉ các class có mặt trong SD cùng số.
+  - Class: UI page `<<boundary>>` · Router `<<boundary>>` · Controller `<<boundary>>` · Service `<<control>>` · Model `<<entity>>` · enum `<<enumeration>>` mà model dùng — chỉ các class có mặt trong SD cùng số.
   - Model: ghi thuộc tính lấy từ `src/server/src/models/*.model.ts` (đúng tên, kiểu).
-  - Method: chỉ các method ứng với bước còn lại trong SD (Controller: handler + `validateRequest`).
-  - Quan hệ: Page ⇢ Controller (dependency, gọi API) · Controller ⇢ Model (dependency) · giữa các Model dùng association có multiplicity.
+  - Method: chỉ các method ứng với bước còn lại trong SD. Router: `route(<METHOD> <path>)` + middleware dùng thật; Controller: handler; Service: method thật trong `services/`.
+  - Quan hệ: Page ⇢ Router (dependency, nhãn là route) · Router ⇢ Controller · Controller ⇢ Service · Service ⇢ Model (dependency) · giữa các Model dùng association có multiplicity.
   - Không vẽ lại toàn bộ subsystem — 9 class diagram subsystem đã có trong `diagrams/class_diagrams/`.
 - [ ] **Định dạng**: mỗi diagram có 2 file cùng tên:
   - `.drawio` — shape gốc, sửa trực tiếp trong draw.io, trình bày theo mẫu `diagrams/sequence_diagrams/UC-M09_Update_Room_Info_SequenceDiagram.drawio`. Ảnh chèn SDS xuất từ draw.io (File → Export as → PNG).
@@ -54,12 +56,12 @@ Cột **Nguồn**:
 
 ### M1 — Lê Trần Trọng Đạt · Inventory & Pricing
 
-| CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
+| CD | SD | # | Use case | UI – Router – Controller – Service – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – RoomController – Room | `getRoom`, `updateRoom` (mới) | thiết kế |
-| [x] | [x] | 02 | UC-R13 Update Room Status | RoomRackPage – FrontDeskController – Room | `updateRoomStatus` | code |
-| [x] | [x] | 03 | UC-M20 Create Promotion Code | PromotionsPage – PromotionController – Promotion | `create` | code + spec (UC-M11) |
-| [x] | [x] | 04 | UC-G11 Apply Discount Code | BookingWizardPage – PromotionController – Promotion | `validate` | code |
+| [x] | [x] | 01 | UC-M09 Update Room Info | RoomInventoryPage – Router – RoomController – RoomInventoryService – Room | `getRoom`, `updateRoom` (mới) | thiết kế |
+| [x] | [x] | 02 | UC-R13 Update Room Status | RoomRackPage – Router – FrontDeskController – RoomStatusService – Room | `updateRoomStatus` | code |
+| [x] | [x] | 03 | UC-M20 Create Promotion Code | PromotionsPage – Router – PromotionController – PromotionService – Promotion | `create` | code + spec (UC-M11) |
+| [x] | [x] | 04 | UC-G11 Apply Discount Code | BookingWizardPage – Router – PromotionController – PromotionService – Promotion | `validate` | code |
 
 **Đặc tả UC cần viết thêm**: [x] UC-M09 (thiết kế trong SD-01) · [ ] UC-R13 · [ ] UC-G11
 
@@ -67,12 +69,12 @@ Cột **Nguồn**:
 
 ### M2 — ____________________ · Auth & Administration
 
-| CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
+| CD | SD | # | Use case | UI – Router – Controller – Service – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 05 | UC-G17 Login | LoginPage – AuthController – User | `login` | code + spec |
-| [x] | [x] | 06 | UC-G16 Register Account (+ Email) | RegisterPage – AuthController – User | `register`, `verifyEmail` | code + spec |
-| [x] | [x] | 07 | UC-C03 Reset Forgotten Password (+ Email) | ForgotPasswordPage – AuthController – User | `forgotPassword`, `resetPassword` | code |
-| [x] | [x] | 08 | UC-A06 Assign Role to Account | AccountsPage – AccountController – User, Role | `assignRole` | code + spec |
+| [x] | [x] | 05 | UC-G17 Login | LoginPage – Router – AuthController – AuthService – User | `login` | code + spec |
+| [x] | [x] | 06 | UC-G16 Register Account (+ Email) | RegisterPage – Router – AuthController – AuthService – User | `register`, `verifyEmail` | code + spec |
+| [x] | [x] | 07 | UC-C03 Reset Forgotten Password (+ Email) | ForgotPasswordPage – Router – AuthController – AuthService – User | `forgotPassword`, `resetPassword` | code |
+| [x] | [x] | 08 | UC-A06 Assign Role to Account | AccountsPage – Router – AccountController – RoleAssignmentService – User, Role | `assignRole` | code + spec |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-C03
 
@@ -80,12 +82,12 @@ Cột **Nguồn**:
 
 ### M3 — ____________________ · Booking & Customer
 
-| CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
+| CD | SD | # | Use case | UI – Router – Controller – Service – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 09 | UC-G01 Search Available Rooms | RoomSearchPage – RoomController – RoomType, Booking | `search` | code + spec |
-| [x] | [x] | 10 | UC-G07 Book Room (+ payOS) | BookingWizardPage – BookingController – Booking | `create` | code + spec (rút gọn từ §6.3) |
-| [x] | [x] | 11 | UC-G14 Cancel Booking | CustomerPages – BookingController – Booking | `cancel` | code + spec |
-| [x] | [x] | 12 | UC-G13 Check Booking Status | BookingLookupPage – BookingController – Booking | `lookup` | code |
+| [x] | [x] | 09 | UC-G01 Search Available Rooms | RoomSearchPage – Router – RoomController – RoomQueries – RoomType, Booking | `search` | code + spec |
+| [x] | [x] | 10 | UC-G07 Book Room (+ payOS) | BookingWizardPage – Router – BookingController – BookingService – Booking | `create` | code + spec (rút gọn từ §6.3) |
+| [x] | [x] | 11 | UC-G14 Cancel Booking | CustomerPages – Router – BookingController – BookingService – Booking | `cancel` | code + spec |
+| [x] | [x] | 12 | UC-G13 Check Booking Status | BookingLookupPage – Router – BookingController – BookingQueries – Booking | `lookup` | code |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-G13
 
@@ -93,12 +95,12 @@ Cột **Nguồn**:
 
 ### M4 — ____________________ · Billing & Payment
 
-| CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
+| CD | SD | # | Use case | UI – Router – Controller – Service – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 13 | UC-G10 Pay for Booking (+ payOS webhook) | PaymentResultPage – PaymentController – Payment | `webhook`, `reconcile` | code + spec |
-| [x] | [x] | 14 | UC-R15 Process Payment | DeskPages (folio) – FrontDeskController – Folio, Payment | `takePayment` | code + spec |
-| [x] | [x] | 15 | UC-C17 Request Refund | CustomerPages – RefundController – RefundRequest | `request` | code + spec |
-| [x] | [x] | 16 | UC-M14 Approve Refund Request | ApprovalsPage – RefundController – RefundRequest | `pending`, `decide` | code |
+| [x] | [x] | 13 | UC-G10 Pay for Booking (+ payOS webhook) | PaymentResultPage – Router – PaymentController – PaymentService – Payment | `webhook`, `reconcile` | code + spec |
+| [x] | [x] | 14 | UC-R15 Process Payment | DeskPages (folio) – Router – FrontDeskController – PaymentService – Folio, Payment | `takePayment` | code + spec |
+| [x] | [x] | 15 | UC-C17 Request Refund | CustomerPages – Router – RefundController – RefundService – RefundRequest | `request` | code + spec |
+| [x] | [x] | 16 | UC-M14 Approve Refund Request | ApprovalsPage – Router – RefundController – RefundService – RefundRequest | `pending`, `decide` | code |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-M14
 
@@ -106,12 +108,12 @@ Cột **Nguồn**:
 
 ### M5 — _____Trần Lý Đức_______________ · Front Desk & HR
 
-| CD | SD | # | Use case | UI – Controller – Model | Controller method | Nguồn |
+| CD | SD | # | Use case | UI – Router – Controller – Service – Model | Controller method | Nguồn |
 |---|---|---|---|---|---|---|
-| [x] | [x] | 17 | UC-R06 Check In Guest | DeskPages – FrontDeskController – Booking, Room | `allocatableRooms`, `checkIn` | code + spec |
-| [x] | [x] | 18 | UC-R09 Check Out Guest | DeskPages – FrontDeskController – Folio, Room | `checkOut` | code + spec |
-| [x] | [x] | 19 | UC-E15 Submit Leave Request | MyLeavePage – LeaveController – LeaveRequest | `submit` | code |
-| [x] | [x] | 20 | UC-M06 Approve / Reject Leave Request | ApprovalsPage – LeaveController – LeaveRequest | `pending`, `decide` | code + spec |
+| [x] | [x] | 17 | UC-R06 Check In Guest | DeskPages – Router – FrontDeskController – CheckInService – Booking, Room | `allocatableRooms`, `checkIn` | code + spec |
+| [x] | [x] | 18 | UC-R09 Check Out Guest | DeskPages – Router – FrontDeskController – CheckOutService – Folio, Room | `checkOut` | code + spec |
+| [x] | [x] | 19 | UC-E15 Submit Leave Request | MyLeavePage – Router – LeaveController – LeaveApprovalService – LeaveRequest | `submit` | code |
+| [x] | [x] | 20 | UC-M06 Approve / Reject Leave Request | ApprovalsPage – Router – LeaveController – LeaveApprovalService – LeaveRequest | `pending`, `decide` | code + spec |
 
 **Đặc tả UC cần viết thêm**: [ ] UC-E15
 

@@ -8,10 +8,19 @@ class PaymentResultPage <<boundary>> {
     +loadResult(orderCode)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/payments/payos/webhook)
+    +route(GET /api/payments/payos/:orderCode/reconcile)
+}
+
 class PaymentController <<boundary>> {
     +webhook(req, res)
     +reconcile(req, res)
-    +validateRequest(req)
+}
+
+class PaymentService <<control>> {
+    +handleWebhook(body)
+    +reconcile(orderCode) : PaymentStatus
 }
 
 class Payment <<entity>> {
@@ -54,10 +63,11 @@ enum PaymentMethod <<enumeration>> {
     LOYALTY_POINTS
 }
 
-PaymentResultPage ..> PaymentController : GET /api/payments/payos/:orderCode/reconcile
-PaymentController ..> Payment
-PaymentController ..> PayOS
-PayOS ..> PaymentController : POST /api/payments/payos/webhook
+PayOS ..> Router : POST /api/payments/payos/webhook
+PaymentResultPage ..> Router : GET /api/payments/payos/:orderCode/reconcile
+Router ..> PaymentController
+PaymentController ..> PaymentService
+PaymentService ..> Payment
 Payment --> PaymentStatus
 Payment --> PaymentMethod
 

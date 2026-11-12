@@ -3,7 +3,9 @@ title SD-09 UC-G01 Search Available Rooms
 
 actor "Guest" as G
 boundary "RoomSearchPage" as UI
+boundary "Router" as RO
 boundary "RoomController" as C
+control "RoomQueries" as S
 entity "RoomType" as RT
 entity "Booking" as B
 database "MongoDB" as DB
@@ -11,33 +13,40 @@ database "MongoDB" as DB
 G -> UI : enter dates and guests
 activate G
 activate UI
-UI -> C : search available rooms
+UI -> RO : GET /api/rooms/search
+activate RO
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> RT : get active room types
+C -> S : search priced room types
+activate S
+S -> RT : get active room types
 activate RT
 RT -> DB : find room types
 activate DB
 DB --> RT : room types
 deactivate DB
-RT --> C : room types
+RT --> S : room types
 deactivate RT
-C -> B : count overlapping bookings
+S -> B : count overlapping bookings
 activate B
 B -> DB : count bookings
 activate DB
 DB --> B : booking counts
 deactivate DB
-B --> C : booked rooms
+B --> S : booked rooms
 deactivate B
 alt rooms available
+S --> C : available room types and prices
 C --> UI : available room types and prices
 UI --> G : show search results
 else no rooms available
+S --> C : empty result
 C --> UI : empty result
 UI --> G : show no availability message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate G
 @enduml

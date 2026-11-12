@@ -4,13 +4,22 @@ title CD-11 UC-G14 Cancel Booking
 skinparam classAttributeIconSize 0
 hide empty members
 
-class "BookingDetailPage" as UI <<boundary>> {
+class BookingDetailPage <<boundary>> {
     +cancelBooking(bookingId)
 }
 
-class "BookingController" as C <<boundary>> {
+class Router <<boundary>> {
+    +route(POST /api/bookings/:id/cancel)
+    +authenticate(req)
+    +requirePermission(permission)
+}
+
+class BookingController <<boundary>> {
     +cancel(req, res)
-    +validateRequest(req)
+}
+
+class BookingService <<control>> {
+    +cancelBooking(command) : CancellationResult
 }
 
 class "Booking" as B <<entity>> {
@@ -38,8 +47,10 @@ enum BookingStatus <<enumeration>> {
     NO_SHOW
 }
 
-UI ..> C : POST /api/bookings/:id/cancel
-C ..> B
+BookingDetailPage ..> Router : POST /api/bookings/:id/cancel
+Router ..> BookingController
+BookingController ..> BookingService
+BookingService ..> B
 B --> BookingStatus : status
 
 @enduml

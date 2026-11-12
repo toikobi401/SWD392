@@ -8,9 +8,18 @@ class AccountsPage <<boundary>> {
     +assignRole(accountId, roleId)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/accounts/:id/roles)
+    +authenticate(req)
+    +requirePermission(permission)
+}
+
 class AccountController <<boundary>> {
     +assignRole(req, res)
-    +validateRequest(req)
+}
+
+class RoleAssignmentService <<control>> {
+    +assign(command) : User
 }
 
 class User <<entity>> {
@@ -69,9 +78,11 @@ enum Permission <<enumeration>> {
     MANAGE_BACKUP
 }
 
-AccountsPage ..> AccountController : POST /api/accounts/:id/roles
-AccountController ..> User
-AccountController ..> Role
+AccountsPage ..> Router : POST /api/accounts/:id/roles
+Router ..> AccountController
+AccountController ..> RoleAssignmentService
+RoleAssignmentService ..> User
+RoleAssignmentService ..> Role
 User "0..*" -- "0..*" Role : roles
 User --> AccountStatus : status
 Role --> RoleName : name

@@ -8,9 +8,19 @@ class StaffBookingPage <<boundary>> {
     +checkOut(bookingId)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/front-desk/check-out)
+    +authenticate(req)
+    +requirePermission(permission)
+    +validateBody(rules)
+}
+
 class FrontDeskController <<boundary>> {
     +checkOut(req, res)
-    +validateRequest(req)
+}
+
+class CheckOutService <<control>> {
+    +checkOut(command) : CheckOutResult
 }
 
 class Folio <<entity>> {
@@ -46,9 +56,11 @@ enum RoomStatus <<enumeration>> {
     OUT_OF_ORDER
 }
 
-StaffBookingPage ..> FrontDeskController : POST /api/front-desk/check-out
-FrontDeskController ..> Folio
-FrontDeskController ..> Room
+StaffBookingPage ..> Router : POST /api/front-desk/check-out
+Router ..> FrontDeskController
+FrontDeskController ..> CheckOutService
+CheckOutService ..> Folio
+CheckOutService ..> Room
 Folio --> FolioStatus
 Room --> RoomStatus
 

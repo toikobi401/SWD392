@@ -3,32 +3,41 @@ title SD-04 UC-G11 Apply Discount Code
 
 actor "Guest" as G
 boundary "BookingWizardPage" as UI
+boundary "Router" as RO
 boundary "PromotionController" as C
+control "PromotionService" as S
 entity "Promotion" as P
 database "MongoDB" as DB
 
 G -> UI : enter discount code
 activate G
 activate UI
-UI -> C : check discount code
+UI -> RO : GET /api/promotions/validate
+activate RO
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> P : get promotion by code
+C -> S : preview discount
+activate S
+S -> P : get promotion by code
 activate P
 P -> DB : find promotion
 activate DB
 DB --> P : promotion data
 deactivate DB
-P --> C : promotion
+P --> S : promotion
 deactivate P
 alt code is valid and applicable
+S --> C : discount and new total
 C --> UI : discount amount and new total
 UI --> G : show discounted total
 else code invalid, expired or used up
+S --> C : reason the code is refused
 C --> UI : code cannot be applied
 UI --> G : show reason
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate G
 @enduml

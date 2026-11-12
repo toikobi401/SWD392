@@ -3,32 +3,42 @@ title SD-19 UC-E15 Submit Leave Request
 
 actor "Employee" as A
 boundary "MyLeavePage" as UI
+boundary "Router" as RO
 boundary "LeaveController" as C
+control "LeaveApprovalService" as S
 entity "LeaveRequest" as L
 database "MongoDB" as DB
 
 A -> UI : enter leave type and dates
 activate A
 activate UI
-UI -> C : submit leave request
+UI -> RO : POST /api/leave-requests
+activate RO
+RO -> RO : authenticate
+RO -> C : forward request
 activate C
-C -> C : validate request
+C -> S : submit leave request
+activate S
 alt dates are valid
-C -> L : create leave request
+S -> L : create leave request
 activate L
 L -> DB : save request
 activate DB
 DB --> L : request saved
 deactivate DB
-L --> C : leave request
+L --> S : leave request
 deactivate L
+S --> C : leave request
 C --> UI : request submitted as PENDING
 UI --> A : show request in list
 else end date before start date
+S --> C : invalid dates
 C --> UI : invalid dates
 UI --> A : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate A
 @enduml

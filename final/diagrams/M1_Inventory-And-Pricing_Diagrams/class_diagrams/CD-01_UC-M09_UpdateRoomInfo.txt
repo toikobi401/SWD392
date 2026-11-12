@@ -8,9 +8,19 @@ class RoomInventoryPage <<boundary>> {
     +saveRoomInfo()
 }
 
+class Router <<boundary>> {
+    +route(PATCH /api/rooms/:id)
+    +authenticate(req)
+    +requirePermission(permission)
+    +validateBody(rules)
+}
+
 class RoomController <<boundary>> {
     +updateRoom(req, res)
-    +validateRequest(req)
+}
+
+class RoomInventoryService <<control>> {
+    +updateRoomInfo(roomId, changes) : Room
 }
 
 class Room <<entity>> {
@@ -31,8 +41,10 @@ enum RoomStatus <<enumeration>> {
     OUT_OF_ORDER
 }
 
-RoomInventoryPage ..> RoomController : GET /api/rooms/:id\nPATCH /api/rooms/:id
-RoomController ..> Room
+RoomInventoryPage ..> Router : PATCH /api/rooms/:id
+Router ..> RoomController
+RoomController ..> RoomInventoryService
+RoomInventoryService ..> Room
 Room --> RoomStatus : status
 
 @enduml

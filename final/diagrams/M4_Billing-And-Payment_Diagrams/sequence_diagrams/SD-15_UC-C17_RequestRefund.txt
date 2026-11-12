@@ -3,32 +3,43 @@ title SD-15 UC-C17 Request Refund
 
 actor "Customer" as U
 boundary "BookingDetailPage" as UI
+boundary "Router" as RO
 boundary "RefundController" as C
+control "RefundService" as S
 entity "RefundRequest" as R
 database "MongoDB" as DB
 
 U -> UI : request refund
 activate U
 activate UI
-UI -> C : submit refund request
+UI -> RO : POST /api/refund-requests
+activate RO
+RO -> RO : authenticate, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request and refund eligibility
+C -> S : request refund
+activate S
+S -> S : check refund eligibility
 alt within 90-day refund window
-C -> R : create refund request
+S -> R : create refund request
 activate R
 R -> DB : save request
 activate DB
 DB --> R : request saved
 deactivate DB
-R --> C : refund request
+R --> S : refund request
 deactivate R
+S --> C : refund request
 C --> UI : refund request submitted
 UI --> U : show reference and status
 else refund window expired
+S --> C : refund not allowed
 C --> UI : refund not allowed
 UI --> U : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate U
 @enduml

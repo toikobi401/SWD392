@@ -8,9 +8,17 @@ class MyLeavePage <<boundary>> {
     +submitLeave(type, fromDate, toDate, reason)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/leave-requests)
+    +authenticate(req)
+}
+
 class LeaveController <<boundary>> {
     +submit(req, res)
-    +validateRequest(req)
+}
+
+class LeaveApprovalService <<control>> {
+    +submit(command) : LeaveRequest
 }
 
 class LeaveRequest <<entity>> {
@@ -41,8 +49,10 @@ enum LeaveStatus <<enumeration>> {
     ESCALATED
 }
 
-MyLeavePage ..> LeaveController : POST /api/leave-requests
-LeaveController ..> LeaveRequest
+MyLeavePage ..> Router : POST /api/leave-requests
+Router ..> LeaveController
+LeaveController ..> LeaveApprovalService
+LeaveApprovalService ..> LeaveRequest
 LeaveRequest --> LeaveType
 LeaveRequest --> LeaveStatus
 

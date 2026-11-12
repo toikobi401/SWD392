@@ -3,7 +3,9 @@ title SD-08 UC-A06 Assign Role to Account
 
 actor "Admin" as A
 boundary "AccountsPage" as UI
+boundary "Router" as RO
 boundary "AccountController" as C
+control "RoleAssignmentService" as S
 entity "User" as U
 entity "Role" as R
 database "MongoDB" as DB
@@ -11,41 +13,49 @@ database "MongoDB" as DB
 A -> UI : choose account and role
 activate A
 activate UI
-UI -> C : submit role assignment
+UI -> RO : POST /api/accounts/:id/roles
+activate RO
+RO -> RO : authenticate, check permission
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> U : get account
+C -> S : assign role
+activate S
+S -> U : get account
 activate U
 U -> DB : find user
 activate DB
 DB --> U : user data
 deactivate DB
-U --> C : account
+U --> S : account
 deactivate U
-C -> R : get role
+S -> R : get role
 activate R
 R -> DB : find role
 activate DB
 DB --> R : role data
 deactivate DB
-R --> C : role
+R --> S : role
 deactivate R
 alt role can be assigned
-C -> U : add role to account
+S -> U : add role to account
 activate U
 U -> DB : save user
 activate DB
 DB --> U : user saved
 deactivate DB
-U --> C : updated account
+U --> S : updated account
 deactivate U
+S --> C : updated account
 C --> UI : role assigned
 UI --> A : show updated roles
 else role conflicts with current roles
+S --> C : role conflict
 C --> UI : role conflict
 UI --> A : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate A
 @enduml

@@ -3,7 +3,9 @@ title SD-17 UC-R06 Check In Guest
 
 actor "Receptionist" as A
 boundary "StaffBookingPage" as UI
+boundary "Router" as RO
 boundary "FrontDeskController" as C
+control "CheckInService" as S
 entity "Booking" as B
 entity "Room" as R
 database "MongoDB" as DB
@@ -11,41 +13,49 @@ database "MongoDB" as DB
 A -> UI : verify guest ID and select room
 activate A
 activate UI
-UI -> C : submit check-in
+UI -> RO : POST /api/front-desk/check-in
+activate RO
+RO -> RO : authenticate, check permission, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> B : get booking
+C -> S : check in guest
+activate S
+S -> B : get booking
 activate B
 B -> DB : find booking
 activate DB
 DB --> B : booking data
 deactivate DB
-B --> C : booking
+B --> S : booking
 deactivate B
 alt identity matches the booking
-C -> R : assign room
+S -> R : assign room
 activate R
 R -> DB : save room as OCCUPIED
 activate DB
 DB --> R : room saved
 deactivate DB
-R --> C : assigned room
+R --> S : assigned room
 deactivate R
-C -> B : mark booking checked in
+S -> B : mark booking checked in
 activate B
 B -> DB : save booking
 activate DB
 DB --> B : booking saved
 deactivate DB
-B --> C : updated booking
+B --> S : updated booking
 deactivate B
+S --> C : stay details
 C --> UI : check-in completed
 UI --> A : show room and stay details
 else identity does not match the booking
+S --> C : identity check failed
 C --> UI : identity check failed
 UI --> A : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate A
 @enduml

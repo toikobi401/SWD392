@@ -8,9 +8,19 @@ class BookingDetailPage <<boundary>> {
     +requestRefund(bookingId, amount, reason)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/refund-requests)
+    +authenticate(req)
+    +validateBody(rules)
+}
+
 class RefundController <<boundary>> {
     +request(req, res)
-    +validateRequest(req)
+}
+
+class RefundService <<control>> {
+    +request(command) : RefundRequest
+    +checkEligibility(booking, payment)
 }
 
 class RefundRequest <<entity>> {
@@ -38,8 +48,10 @@ enum RefundStatus <<enumeration>> {
     REFUND_FAILED
 }
 
-BookingDetailPage ..> RefundController : POST /api/refund-requests
-RefundController ..> RefundRequest
+BookingDetailPage ..> Router : POST /api/refund-requests
+Router ..> RefundController
+RefundController ..> RefundService
+RefundService ..> RefundRequest
 RefundRequest --> RefundStatus
 
 @enduml

@@ -3,40 +3,50 @@ title SD-03 UC-M20 Create Promotion Code
 
 actor "Manager" as M
 boundary "PromotionsPage" as UI
+boundary "Router" as RO
 boundary "PromotionController" as C
+control "PromotionService" as S
 entity "Promotion" as P
 database "MongoDB" as DB
 
 M -> UI : enter promotion details and save
 activate M
 activate UI
-UI -> C : submit new promotion
+UI -> RO : POST /api/promotions
+activate RO
+RO -> RO : authenticate, check permission, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> P : check code exists
+C -> S : create promotion
+activate S
+S -> P : check code exists
 activate P
 P -> DB : find promotion by code
 activate DB
 DB --> P : search result
 deactivate DB
-P --> C : code status
+P --> S : code status
 deactivate P
 alt code is new
-C -> P : create promotion
+S -> P : create promotion
 activate P
 P -> DB : save promotion
 activate DB
 DB --> P : promotion saved
 deactivate DB
-P --> C : new promotion
+P --> S : new promotion
 deactivate P
+S --> C : new promotion
 C --> UI : promotion created
 UI --> M : show promotion in list
 else code already exists
+S --> C : code already exists
 C --> UI : code already exists
 UI --> M : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate M
 @enduml

@@ -8,9 +8,19 @@ class PromotionsPage <<boundary>> {
     +createPromotion()
 }
 
+class Router <<boundary>> {
+    +route(POST /api/promotions)
+    +authenticate(req)
+    +requirePermission(permission)
+    +validateBody(rules)
+}
+
 class PromotionController <<boundary>> {
     +create(req, res)
-    +validateRequest(req)
+}
+
+class PromotionService <<control>> {
+    +create(input, managerId) : PromotionView
 }
 
 class Promotion <<entity>> {
@@ -37,8 +47,10 @@ enum DiscountType <<enumeration>> {
     FIXED_AMOUNT
 }
 
-PromotionsPage ..> PromotionController : POST /api/promotions
-PromotionController ..> Promotion
+PromotionsPage ..> Router : POST /api/promotions
+Router ..> PromotionController
+PromotionController ..> PromotionService
+PromotionService ..> Promotion
 Promotion --> DiscountType : discountType
 
 @enduml

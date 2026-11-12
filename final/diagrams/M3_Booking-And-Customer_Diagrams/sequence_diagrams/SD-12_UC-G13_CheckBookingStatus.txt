@@ -3,32 +3,41 @@ title SD-12 UC-G13 Check Booking Status
 
 actor "Guest" as G
 boundary "BookingLookupPage" as UI
+boundary "Router" as RO
 boundary "BookingController" as C
+control "BookingQueries" as S
 entity "Booking" as B
 database "MongoDB" as DB
 
 G -> UI : enter booking code and email
 activate G
 activate UI
-UI -> C : look up booking
+UI -> RO : GET /api/bookings/lookup
+activate RO
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> B : find booking by code and email
+C -> S : look up reservation
+activate S
+S -> B : find booking by code and email
 activate B
 B -> DB : query booking
 activate DB
 DB --> B : search result
 deactivate DB
-B --> C : booking
+B --> S : booking
 deactivate B
 alt booking found
+S --> C : reservation
 C --> UI : booking details and status
 UI --> G : show booking status
 else no matching booking
+S --> C : booking not found
 C --> UI : booking not found
 UI --> G : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate G
 @enduml

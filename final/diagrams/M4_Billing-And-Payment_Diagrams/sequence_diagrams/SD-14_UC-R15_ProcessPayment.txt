@@ -3,7 +3,9 @@ title SD-14 UC-R15 Process Payment
 
 actor "Receptionist" as R
 boundary "FolioPage" as UI
+boundary "Router" as RO
 boundary "FrontDeskController" as C
+control "PaymentService" as S
 entity "Folio" as F
 entity "Payment" as P
 database "MongoDB" as DB
@@ -11,41 +13,49 @@ database "MongoDB" as DB
 R -> UI : enter amount and payment method
 activate R
 activate UI
-UI -> C : submit payment
+UI -> RO : POST /api/folios/:id/payments
+activate RO
+RO -> RO : authenticate, check permission, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> F : get folio
+C -> S : take desk payment
+activate S
+S -> F : get folio
 activate F
 F -> DB : find folio
 activate DB
 DB --> F : folio data
 deactivate DB
-F --> C : folio
+F --> S : folio
 deactivate F
 alt folio open and amount within balance
-C -> P : record payment
+S -> P : record payment
 activate P
 P -> DB : save payment
 activate DB
 DB --> P : payment saved
 deactivate DB
-P --> C : payment
+P --> S : payment
 deactivate P
-C -> F : update folio balance
+S -> F : update folio balance
 activate F
 F -> DB : save folio
 activate DB
 DB --> F : folio saved
 deactivate DB
-F --> C : updated folio
+F --> S : updated folio
 deactivate F
+S --> C : payment and new balance
 C --> UI : payment recorded
 UI --> R : show receipt and new balance
 else amount exceeds balance
+S --> C : payment rejected
 C --> UI : payment rejected
 UI --> R : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate R
 @enduml

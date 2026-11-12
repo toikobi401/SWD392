@@ -9,10 +9,21 @@ class ApprovalsPage <<boundary>> {
     +approveRefund(id, amount)
 }
 
+class Router <<boundary>> {
+    +route(GET /api/refund-requests/pending)
+    +route(PATCH /api/refund-requests/:id/decision)
+    +authenticate(req)
+    +requirePermission(permission)
+}
+
 class RefundController <<boundary>> {
     +pending(req, res)
     +decide(req, res)
-    +validateRequest(req)
+}
+
+class RefundService <<control>> {
+    +pendingQueue() : RefundRequest[]
+    +decide(command) : RefundRequest
 }
 
 class RefundRequest <<entity>> {
@@ -42,9 +53,10 @@ enum RefundStatus <<enumeration>> {
     REFUND_FAILED
 }
 
-ApprovalsPage ..> RefundController : GET /api/refund-requests/pending
-ApprovalsPage ..> RefundController : PATCH /api/refund-requests/:id/decision
-RefundController ..> RefundRequest
+ApprovalsPage ..> Router : GET /api/refund-requests/pending\nPATCH /api/refund-requests/:id/decision
+Router ..> RefundController
+RefundController ..> RefundService
+RefundService ..> RefundRequest
 RefundRequest --> RefundStatus
 
 @enduml

@@ -3,44 +3,60 @@ title SD-16 UC-M14 Approve Refund Request
 
 actor "Manager" as M
 boundary "ApprovalsPage" as UI
+boundary "Router" as RO
 boundary "RefundController" as C
+control "RefundService" as S
 entity "RefundRequest" as R
 database "MongoDB" as DB
 
 M -> UI : open pending refunds
 activate M
 activate UI
-UI -> C : request pending refunds
+UI -> RO : GET /api/refund-requests/pending
+activate RO
+RO -> RO : authenticate, check permission
+RO -> C : forward request
 activate C
-C -> R : get pending refund requests
+C -> S : get pending queue
+activate S
+S -> R : get pending refund requests
 activate R
 R -> DB : find pending requests
 activate DB
 DB --> R : requests
 deactivate DB
-R --> C : pending requests
+R --> S : pending requests
 deactivate R
+S --> C : pending queue
+deactivate S
 C --> UI : pending refund list
 UI --> M : show pending list
 M -> UI : approve request with amount
-UI -> C : submit decision
-C -> C : validate request
+UI -> RO : PATCH /api/refund-requests/:id/decision
+RO -> RO : authenticate, check permission
+RO -> C : forward request
+C -> S : decide refund
+activate S
 alt amount within captured total
-C -> R : approve refund request
+S -> R : approve refund request
 activate R
 R -> DB : save decision
 activate DB
 DB --> R : decision saved
 deactivate DB
-R --> C : updated request
+R --> S : updated request
 deactivate R
+S --> C : approved request
 C --> UI : refund approved
 UI --> M : remove request from list
 else amount exceeds captured total
+S --> C : invalid refund amount
 C --> UI : invalid refund amount
 UI --> M : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate M
 @enduml

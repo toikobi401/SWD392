@@ -3,7 +3,9 @@ title SD-13 UC-G10 Pay for Booking
 
 actor "Guest" as G
 boundary "PaymentResultPage" as UI
+boundary "Router" as RO
 boundary "PaymentController" as C
+control "PaymentService" as S
 entity "Payment" as P
 database "MongoDB" as DB
 participant "payOS" as X
@@ -11,38 +13,50 @@ participant "payOS" as X
 G -> X : pay on payOS checkout
 activate G
 activate X
-X -> C : payment result webhook
+X -> RO : POST /api/payments/payos/webhook
+activate RO
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> P : update payment status
+C -> S : handle payment result
+activate S
+S -> P : update payment status
 activate P
 P -> DB : save payment
 activate DB
 DB --> P : payment saved
 deactivate DB
-P --> C : payment
+P --> S : payment
 deactivate P
+S --> C : done
+deactivate S
 C --> X : webhook received
 X --> UI : redirect to result page
 deactivate X
-UI -> C : get payment result
+UI -> RO : GET /api/payments/payos/:orderCode/reconcile
 activate UI
-C -> P : get payment
+RO -> C : forward request
+C -> S : reconcile payment
+activate S
+S -> P : get payment
 activate P
 P -> DB : find payment
 activate DB
 DB --> P : payment data
 deactivate DB
-P --> C : payment
+P --> S : payment
 deactivate P
 alt payment is PAID
+S --> C : payment PAID
 C --> UI : payment confirmed
 UI --> G : show booking confirmation
 else payment failed or cancelled
+S --> C : payment not completed
 C --> UI : payment not completed
 UI --> G : show failure and retry option
 end
+deactivate S
 deactivate UI
 deactivate C
+deactivate RO
 deactivate G
 @enduml

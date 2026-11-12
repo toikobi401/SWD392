@@ -8,9 +8,19 @@ class FolioPage <<boundary>> {
     +takePayment(amount, method)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/folios/:id/payments)
+    +authenticate(req)
+    +requirePermission(permission)
+    +validateBody(rules)
+}
+
 class FrontDeskController <<boundary>> {
     +takePayment(req, res)
-    +validateRequest(req)
+}
+
+class PaymentService <<control>> {
+    +takeDeskPayment(command) : DeskPaymentResult
 }
 
 class Folio <<entity>> {
@@ -63,9 +73,11 @@ enum PaymentMethod <<enumeration>> {
     LOYALTY_POINTS
 }
 
-FolioPage ..> FrontDeskController : POST /api/folios/:id/payments
-FrontDeskController ..> Folio
-FrontDeskController ..> Payment
+FolioPage ..> Router : POST /api/folios/:id/payments
+Router ..> FrontDeskController
+FrontDeskController ..> PaymentService
+PaymentService ..> Folio
+PaymentService ..> Payment
 Folio "0..1" -- "0..*" Payment : folioId
 Folio --> FolioStatus
 Payment --> PaymentStatus

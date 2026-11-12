@@ -8,9 +8,17 @@ class LoginPage <<boundary>> {
     +login(email, password)
 }
 
+class Router <<boundary>> {
+    +route(POST /api/auth/login)
+    +validateBody(rules)
+}
+
 class AuthController <<boundary>> {
     +login(req, res)
-    +validateRequest(req)
+}
+
+class AuthService <<control>> {
+    +login(command) : AuthTokens
 }
 
 class User <<entity>> {
@@ -32,8 +40,10 @@ enum AccountStatus <<enumeration>> {
     DEACTIVATED
 }
 
-LoginPage ..> AuthController : POST /api/auth/login
-AuthController ..> User
+LoginPage ..> Router : POST /api/auth/login
+Router ..> AuthController
+AuthController ..> AuthService
+AuthService ..> User
 User --> AccountStatus : status
 
 @enduml

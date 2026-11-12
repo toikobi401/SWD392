@@ -3,32 +3,42 @@ title SD-05 UC-G17 Login
 
 actor "Guest" as G
 boundary "LoginPage" as UI
+boundary "Router" as RO
 boundary "AuthController" as C
+control "AuthService" as S
 entity "User" as U
 database "MongoDB" as DB
 
 G -> UI : enter email and password
 activate G
 activate UI
-UI -> C : submit login
+UI -> RO : POST /api/auth/login
+activate RO
+RO -> RO : validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> U : get account by email
+C -> S : log in
+activate S
+S -> U : get account by email
 activate U
 U -> DB : find user
 activate DB
 DB --> U : user data
 deactivate DB
-U --> C : account
+U --> S : account
 deactivate U
 alt account active and password correct
+S --> C : access and refresh tokens
 C --> UI : access token
 UI --> G : open home page
 else wrong email or password
+S --> C : invalid credentials
 C --> UI : invalid credentials
 UI --> G : show login error
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate G
 @enduml

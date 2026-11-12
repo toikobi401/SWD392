@@ -3,32 +3,42 @@ title SD-01 UC-M09 Update Room Info
 
 actor "Manager" as M
 boundary "RoomInventoryPage" as UI
+boundary "Router" as RO
 boundary "RoomController" as C
+control "RoomInventoryService" as S
 entity "Room" as R
 database "MongoDB" as DB
 
 M -> UI : edit room info and save
 activate M
 activate UI
-UI -> C : submit room changes
+UI -> RO : PATCH /api/rooms/:id
+activate RO
+RO -> RO : authenticate, check permission, validate input
+RO -> C : forward request
 activate C
-C -> C : validate request
-C -> R : update room info
+C -> S : update room info
+activate S
+S -> R : save room info
 activate R
 R -> DB : save room
 activate DB
 DB --> R : save result
 deactivate DB
-R --> C : update result
+R --> S : update result
 deactivate R
 alt room number is unique
+S --> C : updated room
 C --> UI : room updated
 UI --> M : show updated room details
 else room number already exists
+S --> C : room number already exists
 C --> UI : room number already exists
 UI --> M : show error message
 end
+deactivate S
 deactivate C
+deactivate RO
 deactivate UI
 deactivate M
 @enduml

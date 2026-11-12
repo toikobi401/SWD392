@@ -8,9 +8,16 @@ class BookingWizardPage <<boundary>> {
     +applyDiscountCode(code)
 }
 
+class Router <<boundary>> {
+    +route(GET /api/promotions/validate)
+}
+
 class PromotionController <<boundary>> {
     +validate(req, res)
-    +validateRequest(req)
+}
+
+class PromotionService <<control>> {
+    +preview(code, subtotal) : PromotionPreview
 }
 
 class Promotion <<entity>> {
@@ -33,8 +40,10 @@ enum DiscountType <<enumeration>> {
     FIXED_AMOUNT
 }
 
-BookingWizardPage ..> PromotionController : GET /api/promotions/validate?code=&subtotal=
-PromotionController ..> Promotion
+BookingWizardPage ..> Router : GET /api/promotions/validate
+Router ..> PromotionController
+PromotionController ..> PromotionService
+PromotionService ..> Promotion
 Promotion --> DiscountType : discountType
 
 @enduml
